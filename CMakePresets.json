@@ -15,6 +15,31 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg/installed/x64-windows/",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_C_COMPILER": "clang.exe",
+        "CMAKE_CXX_COMPILER": "clang++.exe"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "win64-debug",
+      "displayName": "Windows x64 Debug",
+      "description": "Target Windows with the Visual Studio development environment. (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "installDir": "${sourceDir}/install/${presetName}",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg/installed/x64-windows/",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_C_COMPILER": "clang.exe",
         "CMAKE_CXX_COMPILER": "clang++.exe"
       },
@@ -34,6 +59,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_PREFIX_PATH": "${sourceDir}/vcpkg/installed/x64-linux/share/",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++"
       },

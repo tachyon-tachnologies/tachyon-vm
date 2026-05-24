@@ -1,15 +1,15 @@
+#include <SDL3/SDL.h>
+#include <Scratch/Common.hpp>
 #include <Scratch/ControlFlow.hpp>
+#include <Scratch/Data.hpp>
+#include <Scratch/Looks.hpp>
+#include <Scratch/Motion.hpp>
+#include <Scratch/Operator.hpp>
+#include <Scratch/Procedures.hpp>
 #include <Scratch/Reporters.hpp>
 #include <Scratch/Sensing.hpp>
-#include <Scratch/Looks.hpp>
-#include <Scratch/Data.hpp>
-#include <Scratch/Procedures.hpp>
-#include <Scratch/Operator.hpp>
-#include <Scratch/Motion.hpp>
-#include <Scratch/Common.hpp>
-#include <Tachyon/Tachyon.hpp>
 #include <Tachyon/Events.hpp>
-#include <SDL3/SDL.h>
+#include <Tachyon/Tachyon.hpp>
 
 static Tachyon::VirtualMachine VM;
 static bool TachyonInitialized = false;

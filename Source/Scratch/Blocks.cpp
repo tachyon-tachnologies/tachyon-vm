@@ -273,7 +273,7 @@ ScratchMutation ScratchBlock::ParseMutation(ondemand::object MutationObject) {
 
 static inline ScratchInput::InputType GetInputType(std::string & Key) {
     /* these all belong to the same type (ScratchInput::InputType::ValueInput) */
-    std::unordered_set<std::string> ValueKeys = {
+    static const std::unordered_set<std::string> ValueKeys = {
         "VALUE", "MESSAGE", "STRING1", "STRING2",
         "OPERAND1", "OPERAND2", "ITEM", "INDEX",
         "TIMES", "NUM1", "NUM2", "STRING",
@@ -296,7 +296,7 @@ static inline ScratchInput::InputType GetInputType(std::string & Key) {
 
 static inline ScratchField::FieldType GetFieldType(std::string & Key) {
     /* these all belong to the same type (ScratchField::FieldType::StringField) */
-    std::unordered_set<std::string> ValueKeys = {
+    static const std::unordered_set<std::string> ValueKeys = {
         "OPERATOR", "VALUE", "STOP_OPTION", "CURRENTMENU",
         "COSTUME", "TO", "SOUND_MENU", "BACKDROP",
         "CLONE_OPTION", "EFFECT", "PROPERTY", "OBJECT",

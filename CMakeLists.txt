@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
+if(MSVC)
+    message(FATAL_ERROR "Please use a compiler such as G++ or Clang++")
+endif()
+
 project(
     tachyon-vm
     VERSION 0.01
@@ -31,10 +35,6 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -fno-exceptions
     -march=native
 )
-
-if(MSVC)
-    message(FATAL_ERROR "Please use a compiler such as G++ or Clang++")
-endif()
 
 # SDl3
 find_package(SDL3 CONFIG REQUIRED)

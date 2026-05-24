@@ -1,4 +1,5 @@
 #include <Tachyon/ExMem.hpp>
+#include <Tachyon/Debug.hpp>
 #include <Common.hpp>
 #include <stddef.h>
 
@@ -8,24 +9,36 @@
 #include <sys/mman.h>
 #endif
 
-void * Tachyon::AllocateCodeMemory(size_t CodeSize) {
+void * Tachyon::AllocateCodeMemory(const size_t Size) {
 #if (defined(_WIN32) || defined(_WIN64))
-	/* windows target */
-	return VirtualAlloc(nullptr, CodeSize, (MEM_RESERVE | MEM_COMMIT), PAGE_READWRITE);
+	return VirtualAlloc(nullptr, Size, (MEM_RESERVE | MEM_COMMIT), PAGE_READWRITE);
 #else
-	/* unix target */
-	void * Addr = mmap(0, CodeSize, (PROT_WRITE | PROT_READ), (MAP_PRIVATE | MAP_ANON), -1, 0);
+	void * Addr = mmap(0, Size, (PROT_WRITE | PROT_READ), (MAP_PRIVATE | MAP_ANON), -1, 0);
 	return (Addr == MAP_FAILED) ? NULL : Addr;
 #endif
 }
 
-bool Tachyon::ProtectCodeMemory(void * Base, size_t CodeSize) {
+void Tachyon::FreeCodeMemory(void * Base, [[maybe_unused]] const size_t Size) {
+	if (Base == nullptr) {
+		return;
+	}
 #if (defined(_WIN32) || defined(_WIN64))
-	/* windows target */
-	PDWORD __unused PreviousProtection;
-	return VirtualProtect(Base, CodeSize, PAGE_EXECUTE, PreviousProtection) ? true : false;
+	bool rc = VirtualFree(Base, 0, MEM_RELEASE);
+	TachyonAssertMsg(rc == true, "Failed to free JIT code memory");
 #else
-	/* unix target */
-	return mprotect(Base, CodeSize, (PROT_EXEC | PROT_READ)) != -1 ? true : false;
+	TachyonAssertMsg(munmap(Base, Size) != -1, "Failed to free JIT code memory");
+#endif
+}
+
+bool Tachyon::ProtectCodeMemory(void * Base, const size_t Size) {
+	if (Base == nullptr) {
+		return false;
+	}
+#if (defined(_WIN32) || defined(_WIN64))
+	DWORD PreviousProtection;
+	bool rc = VirtualProtect(Base, Size, PAGE_EXECUTE_READ, &PreviousProtection);
+	return rc;
+#else
+	return mprotect(Base, Size, (PROT_EXEC | PROT_READ)) != -1 ? true : false;
 #endif
 }

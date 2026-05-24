@@ -1,7 +1,7 @@
 #pragma once
 
-#include <exception>
 #include <Common.hpp>
+#include <exception>
 
 /* some parts taken from lk and ppsspp (thanks :>) */
 
@@ -17,8 +17,21 @@
         }  \
     } while(false)
 
+#define TachyonAssertMsg(Condition, Message) \
+    do { \
+        if (unlikely((Condition) == false)) { \
+            DebugError("Tachyon assertion failed at (%s:%d): %s\n", __FILE__, __LINE__, #Condition); \
+            DebugError("Assertion message: " Message "\n"); \
+            std::terminate(); \
+        }  \
+    } while(false)
+
 #define TachyonUnimplemented(...) \
     do { DebugError("Tachyon Unimplemented: " __VA_ARGS__); std::terminate(); } while(false)
+
+#define TachyonAbort(...) \
+    do { DebugError(__VA_ARGS__); std::terminate(); } while(false)
+    
 
 namespace Debug {
     void Report(const char * Message, ...);

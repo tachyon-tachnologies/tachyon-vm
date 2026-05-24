@@ -1,6 +1,7 @@
-#include <Tachyon/Encoder.hpp>
-#include <Tachyon/Debug.hpp>
+#include <Common.hpp>
 #include <Scratch/Common.hpp>
+#include <Tachyon/Debug.hpp>
+#include <Tachyon/Encoder.hpp>
 #include <Tachyon/Tachyon.hpp>
 #include <iostream>
 
@@ -8,9 +9,26 @@
 #include <SDL3/SDL_main.h>
 
 // for compiler testing
-int main(int argc, char * argv[]) {
+int main(int __unused argc, char * __unused argv[]) {
     Tachyon_AMD64Encoder Encoder;
-    std::cout << "Tachyon lives on!" << std::endl;
+    uint8_t test = 0;
+    // mov r15, test | or | movabs r15, test
+    Encoder.Mov(GpReg::REG_R15, (uint64_t)&test);
+    // mov al, 1
+    Encoder.Mov(GpReg::REG_AL, (uint8_t)1);
+    // mov byte ptr [r15], al
+    Encoder.Mov(Mem(GpReg::REG_R15), GpReg::REG_AL);
+    // mov rax, -1
+    Encoder.Mov(GpReg::REG_RAX, (uint64_t)-1);
+    // ret
+    Encoder.Ret();
+    Encoder.CodeDump();
+
+    OutputCode Code = Encoder.MakeExecutable();
+    int rc = Code();
+    DebugInfo("JIT code exit code: %d\n", rc);
+    DebugInfo("Test = %d\n", test);
+    TachyonAssertMsg(test == 1, "JIT test FAILED!");
     return 0;
 }
 
