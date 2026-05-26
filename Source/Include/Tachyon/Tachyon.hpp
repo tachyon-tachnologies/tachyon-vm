@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Scratch/Procedures.hpp>
+#include <Tachyon/Encoder.hpp>
 #include <Scratch/Common.hpp>
 #include <Scratch/Blocks.hpp>
 #include <Common.hpp>

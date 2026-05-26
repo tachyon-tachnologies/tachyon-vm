@@ -6,11 +6,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <utility>
 #include <variant>
 #include <optional>
 
 using OutputCode = int (*)(void);
+
+struct Tachyon_JITState {
+    OutputCode EntryPoint = nullptr;
+};
 
 class Tachyon_EncoderImpl {
     protected:

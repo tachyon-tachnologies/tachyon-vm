@@ -100,5 +100,12 @@ bool __hot Tachyon::Step(void) {
     if (unlikely(CurrentScript == nullptr)) {
         return true;
     }
+    if (CurrentScript->JIT_State.EntryPoint == nullptr) {
+        DebugInfo("Script is not yet compiled. Compiling...\n");
+        // TODO: compile script into native machine code
+    } else {
+        DebugInfo("Executing compiled script...\n");
+        // nothing for now :(
+    }
     return false;
 }

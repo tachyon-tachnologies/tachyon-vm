@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Tachyon/Encoder.hpp"
+#include <Tachyon/Encoder.hpp>
 #include <Tachyon/Debug.hpp>
 #include <Scratch/Procedures.hpp>
 #include <Scratch/Motion.hpp>
@@ -50,6 +50,7 @@ namespace Scratch {
         std::vector<ProcedureBindings> ParamBindings;
         ScratchSprite * Sprite;
         ScratchStatus CurrentStatus;
+        Tachyon_JITState JIT_State;
         uint8_t ControlFlags;
     };
 
@@ -82,7 +83,7 @@ namespace Scratch {
     }
 
     static inline void __hot UnbindParameters(ScratchScript & Script) {
-        TachyonAssert(Script.ParamBindings.empty() == false);
+        TachyonAssertMsg(Script.ParamBindings.empty() == false, "Parameter bindings are empty??");
         Script.ParamBindings.pop_back();
     }
 

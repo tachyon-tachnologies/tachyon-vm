@@ -456,24 +456,6 @@ static inline void ParseProcedureDefinition(ScratchInput & Input, ondemand::arra
     InputObject.reset();
 }
 
-// static inline void ParseBroadcastInput(ScratchInput & Input, ondemand::array & InputObject) {
-//     InputObject.reset();
-
-//     simdjson::simdjson_result Result = InputObject.at(1);
-
-//     TachyonAssert(Result.error() == error_code::SUCCESS);
-//     ondemand::array ValueArray;
-//     TachyonAssert(Result.get_array().get(ValueArray) == error_code::SUCCESS);
-    
-//     Result = ValueArray.at(2);
-//     std::string BroadcastKey;
-//     TachyonAssert(Result.get_string().get(BroadcastKey) == error_code::SUCCESS);
-
-//     Input.Input = BroadcastKey;
-
-//     InputObject.reset();
-// }
-
 ScratchInput ScratchBlock::ParseInput(std::string & Key, ondemand::array InputObject) {
     ScratchInput Input;
     Input.ShadowType = ParseShadowType(InputObject);
