@@ -21,17 +21,29 @@
  */
 #define TACHYON_CFG_PBLOCK    (1 << 1)
 
+/**
+ * Configuration option: Shit talk.
+ * Talks shit about WarpDrive (build a x86 JIT compiler before talking shit, loser), TurboWarp (we don't mean it for yall), and any other Scratch mod that is slower than us.
+ */
+#define TACHYON_CFG_SHITTALK  (1 << 2)
+
+/**
+ * Configuration option: Blitz
+ * Makes the VM execute code extremely fast.
+ */
+#define TACHYON_CFG_BLITZ     (1 << 3)
+
 namespace Tachyon {
 
     using TachyonConfig = uint16_t;
 
-    struct VirtualMachine {
+    struct Tachyon_VirtualMachine {
         Scratch::ScratchProject * Project = nullptr;
         SDL_Window * TachyonWindow = nullptr;
         SDL_Renderer * TachyonRenderer = nullptr;
         TachyonConfig Configuration;
-        bool ShouldExit = false;
-        bool RendererUpdate = false;
+        bool ShouldExit;
+        bool RendererUpdate;
     };
 
     /**
@@ -49,7 +61,7 @@ namespace Tachyon {
      * Gets the VM information.
      * @return VM information.
      */
-    VirtualMachine * GetVM(void);
+    Tachyon_VirtualMachine * GetVM(void);
 
     /**
      * Gets the VM configuration.

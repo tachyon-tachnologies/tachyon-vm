@@ -1,7 +1,8 @@
 #include <Tachyon/Encoder.hpp>
+#include <Tachyon/Debug.hpp>
 #include <cstdint>
 
-// IMMEDIATE
+// Immediate to register versions
 
 void Tachyon_AMD64Encoder::Mov(const GpReg Dest, uint8_t Src) {
     uint8_t Opcode = 0b10110000;
@@ -36,63 +37,110 @@ void Tachyon_AMD64Encoder::Mov(const GpReg Dest, uint64_t Src) {
     this->Write64(Src);
 }
 
-// Memory access versions
+// Various memory access versions
 
 // mov r/m, reg
 // 8-bit, 16-bit, 32-bit, and 64-bit
 void Tachyon_AMD64Encoder::Mov(const Mem Dest, const GpReg Src) {
-    /* addrsize, opsize, and finally rex */
+    /* address size, operand size, and finally REX */
     if (Dest.IsRegister()) {
         const GpReg Register = Dest.GetRegister();
-        TachyonAssertMsg(Dest.GetRegister().Is16bit() == false, "Invalid 64-bit address! Should be either a DWORD PTR or QWORD PTR!");
-        if (Register.Is32bit()) {
+        TachyonAssertMsg(Register.Is16bit() == false && Register.Is8bit() == false, "Invalid address! Should be either a BYTE PTR, DWORD PTR, QWORD PTR!");
+        if (Register.RequiresAddrsizePrefix() == true) {
             this->EmitAddrsizePrefix();
         }
     }
+    // REX may or may not be used. we don't know for certain yet
+    uint8_t REX = 0x40;
     if (Src.Is16bit()) {
         this->EmitOpsizePrefix();
     }
-    else if (Src.Is64bit()) {
-        this->EmitREX(true, false, false, false);
-    }
+    this->SetREX_RegExtension(REX, Src.Is64bit());
     /* opcode */
     uint8_t TargetOpcode = Src.Is8bit() == true ? TargetOpcode = 0x88 : TargetOpcode = 0x89;
     /* modr/m */
     uint8_t ModRM;
-    // could possibly be turnt into a seperate function
+    // TODO: could possibly be turnt into a seperate function
     this->SetModRM_Register(ModRM, Src, false, false);
     switch (Dest.GetType()) {
         case Mem::MEM_REG: {
-            // there's levels to this shit
+            GpReg Reg = Dest.GetRegister();
+            this->SetREX_BaseExtension(REX, Reg.Is64bit());
+            // something was changed in the rex byte. use it
+            if (REX != 0x40) {
+                this->Write8(REX);
+            }
+            this->SetModRM_Register(ModRM, Reg, true, false);
+            this->Write8(TargetOpcode);
+
+            if (Reg.ShouldMemAccessThroughRM() == true) {
+                /* [r/m] */
+                this->SetModRM_Access(ModRM, ModType::NO_DISPLACEMENT);
+                this->Write8(ModRM);
+                return;
+            }
+            if (Reg.IsBP() == true) {
+                /* [r/m + disp8] */
+                this->SetModRM_Access(ModRM, ModType::BYTE_DISPLACEMENT);
+                this->Write8(ModRM);
+                this->Write8(0);
+                return;
+            }
+            /* [sib] */
+            this->SetModRM_Access(ModRM, ModType::NO_DISPLACEMENT);
+            this->Write8(ModRM);
+            Mem Dummy(1, GpReg::REG_AL, Reg);
+            this->Write8(Dummy.GetSIB());
+            this->Write8(0);
             break;
         }
         case Mem::MEM_REG_DISP: {
             GpRegDisp RegDisp = Dest.GetRegisterDisp();
+            this->SetREX_BaseExtension(REX, RegDisp.first.Is64bit());
+            // something was changed in the rex byte. use it
+            if (REX != 0x40) {
+                this->Write8(REX);
+            }
             this->SetModRM_Register(ModRM, RegDisp.first, true, false);
+            // should we use disp8 or disp32
             if (std::holds_alternative<int32_t>(RegDisp.second) == true) {
                 this->SetModRM_Access(ModRM, ModType::DWORD_DISPLACEMENT);
-            }
-            else {
+            } else {
                 this->SetModRM_Access(ModRM, ModType::BYTE_DISPLACEMENT);
             }
             this->Write8(TargetOpcode);
             this->Write8(ModRM);
+
+            if (RegDisp.first.IsSP() == false) {
+                /* [r/m + disp8/disp32] */
+                if (std::holds_alternative<int32_t>(RegDisp.second)) {
+                    uint32_t Disp32 = (uint32_t)std::get<int32_t>(RegDisp.second);
+                    this->Write32(Disp32);
+                    return;
+                }
+                uint8_t Disp8 = (uint8_t)std::get<int8_t>(RegDisp.second);
+                this->Write8(Disp8);
+                return;
+            }
+            /* [sib + disp8/disp32] */
             Mem Dummy(1, GpReg::REG_AL, RegDisp.first);
             this->Write8(Dummy.GetSIB());
 
             if (std::holds_alternative<int32_t>(RegDisp.second)) {
                 uint32_t Disp32 = (uint32_t)std::get<int32_t>(RegDisp.second);
                 this->Write32(Disp32);
+                return;
             }
-            else {
-                uint32_t Disp8 = (uint8_t)std::get<int8_t>(RegDisp.second);
-                this->Write8(Disp8);
-            }
+
+            uint8_t Disp8 = (uint8_t)std::get<int8_t>(RegDisp.second);
+            this->Write8(Disp8);
             break;
         }
         case Mem::MEM_SIB: {
+            // TODO: this should be easy
             TachyonUnimplemented("SIB encoding\n");
             __builtin_unreachable();
+            break;
         }
     }
 }

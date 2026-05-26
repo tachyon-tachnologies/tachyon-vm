@@ -23,6 +23,7 @@ add_executable(${PROJECT_NAME} ${CPP_SRC})
 target_include_directories(${PROJECT_NAME} PRIVATE "${TACHYON_SOURCE}/Include")
 
 target_compile_options(${PROJECT_NAME} PRIVATE
+    -Werror
     -Wextra
     -Wpointer-arith
     -Wcast-align

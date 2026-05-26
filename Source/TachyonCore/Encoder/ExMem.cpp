@@ -9,12 +9,13 @@
 #include <sys/mman.h>
 #endif
 
+[[nodiscard]]
 void * Tachyon::AllocateCodeMemory(const size_t Size) {
 #if (defined(_WIN32) || defined(_WIN64))
 	return VirtualAlloc(nullptr, Size, (MEM_RESERVE | MEM_COMMIT), PAGE_READWRITE);
 #else
 	void * Addr = mmap(0, Size, (PROT_WRITE | PROT_READ), (MAP_PRIVATE | MAP_ANON), -1, 0);
-	return (Addr == MAP_FAILED) ? NULL : Addr;
+	return (Addr == MAP_FAILED) ? nullptr : Addr;
 #endif
 }
 

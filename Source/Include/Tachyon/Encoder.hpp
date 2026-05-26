@@ -19,21 +19,21 @@ class Tachyon_EncoderImpl {
         size_t CodeSize;
         size_t BytesWritten;
 
-        void Write8(uint8_t Byte) {
+        inline void Write8(uint8_t Byte) {
             *CodePointer++ = Byte;
             BytesWritten++;
         }
-        void Write16(uint16_t Word) {
+        inline void Write16(uint16_t Word) {
             memcpy(CodePointer, &Word, 2);
             CodePointer += 2;
             BytesWritten += 2;
         }
-        void Write32(uint32_t Dword) {
+        inline void Write32(uint32_t Dword) {
             memcpy(CodePointer, &Dword, 4);
             CodePointer += 4;
             BytesWritten += 4;
         }
-        void Write64(uint64_t Qword) {
+        inline void Write64(uint64_t Qword) {
             memcpy(CodePointer, &Qword, 8);
             CodePointer += 8;
             BytesWritten += 8;
@@ -96,6 +96,7 @@ class GpReg {
         };
 
         GpReg() = default;
+
         constexpr GpReg(const GpReg::RegisterKind Reg) : Value(Reg) {
             /* cache regid */
             switch (this->Value) {
@@ -115,6 +116,7 @@ class GpReg {
                 }
                 case GpReg::REG_R8L...GpReg::REG_R15L: {
                     this->RegId = (this->Value - GpReg::REG_R8L) & 0b111;
+                    break;
                 }
                 /* 16-bit */
                 case GpReg::REG_AX...GpReg::REG_DI: {
@@ -475,7 +477,25 @@ class GpReg {
         constexpr bool RequiresOpsizePrefix(void) const {
             return this->Is16bit();
         }
+        
+        constexpr bool RequiresAddrsizePrefix(void) const {
+            return this->Is32bit();
+        }
+
+        constexpr bool ShouldMemAccessThroughRM(void) const {
+            switch(this->RegId) {
+                case 0b101:
+                case 0b100: {
+                    return false;
+                }
+                default: {
+                    return true;
+                }
+            }
+        }
+
     private:
+        bool UseREX;
         RegisterKind Value;
         uint8_t RegId;
 };
@@ -499,50 +519,44 @@ class Mem {
             MEM_REG_DISP,
         };
 
-        Mem(const uint8_t S, const GpReg I, const GpReg B) {
+        Mem(const uint8_t S, const GpReg I, const GpReg B) : AccessType(Mem::MEM_SIB) {
             this->Value = (struct Sib){
                 S,
                 I,
                 B,
                 std::nullopt
             };
-            this->AccessType = Mem::MEM_SIB;
         }
 
-        Mem(const uint8_t S, const GpReg I, const GpReg B, const int32_t Displacement) {
+        Mem(const uint8_t S, const GpReg I, const GpReg B, const int32_t Displacement) : AccessType(Mem::MEM_SIB) {
             this->Value = (struct Sib){
                 S,
                 I,
                 B,
                 Disp(Displacement)
             };
-            this->AccessType = Mem::MEM_SIB;
         }
 
         // for displacement only, make S=0, I=GpReg::REG_SP, B=GpReg::REG_BP
-        Mem(const uint8_t S, const GpReg I, const GpReg B, const int8_t Displacement) {
+        Mem(const uint8_t S, const GpReg I, const GpReg B, const int8_t Displacement) : AccessType(Mem::MEM_SIB) {
             this->Value = (struct Sib){
                 S,
                 I,
                 B,
                 Disp(Displacement)
             };
-            this->AccessType = Mem::MEM_SIB;
         }
 
-        Mem(GpReg Register) {
+        Mem(const GpReg Register) : AccessType(Mem::MEM_REG) {
             this->Value = Register;
-            this->AccessType = Mem::MEM_REG;
         }
 
-        Mem(GpReg Register, int32_t Displacement) {
+        Mem(const GpReg Register, const int32_t Displacement) : AccessType(Mem::MEM_REG_DISP) {
             this->Value = GpRegDisp(Register, Displacement);
-            this->AccessType = Mem::MEM_REG_DISP;
         }
 
-        Mem(GpReg Register, int8_t Displacement) {
+        Mem(const GpReg Register, const int8_t Displacement) : AccessType(Mem::MEM_REG_DISP) {
             this->Value = GpRegDisp(Register, Displacement);
-            this->AccessType = Mem::MEM_REG_DISP;
         }
 
         constexpr bool IsSIB(void) const {
@@ -566,13 +580,13 @@ class Mem {
         }
 
         /* assumes that this is 100% a SIB type */
-        constexpr Mem::Sib & GetSIBStruct(void) {
+        constexpr Sib & GetSIBStruct(void) {
             return std::get<Mem::Sib>(this->Value);
         }
 
         constexpr Disp GetSIBDisplacement(void) const {
             TachyonAssertMsg(this->IsSIB() == true, "Invalid memory access type! Expected SIB type.");
-            const struct Sib& Sib = std::get<struct Sib>(this->Value);
+            const struct Sib & Sib = std::get<struct Sib>(this->Value);
             return Sib.Displacement.value_or(Disp(0));
         }
 
@@ -586,33 +600,37 @@ class Mem {
             return std::get<GpRegDisp>(this->Value);
         }
         
-        constexpr const Mem::MemType GetType(void) const {
+        constexpr MemType GetType(void) const {
             return this->AccessType;
         }
 
     private:
-        MemType AccessType;
+        const MemType AccessType;
         std::variant<struct Sib, GpReg, GpRegDisp> Value;
 };
 
 class Tachyon_AMD64Encoder : public Tachyon_EncoderImpl {
     // https://wiki.osdev.org/X86-64_Instruction_Encoding
     private:
-        inline void EmitREX(const bool Opsize64, const bool R, const bool X, const bool B);
-
+        /*
+            REX
+        */
+        void EmitREX(const bool Opsize64, const bool R, const bool X, const bool B);
+        void SetREX_Opsize(uint8_t & REX, const bool Opsize64);
+        void SetREX_RegExtension(uint8_t & REX, const bool R);
+        void SetREX_SIBExtension(uint8_t & REX, const bool X);
+        void SetREX_BaseExtension(uint8_t & REX, const bool B);
+        /*
+            ModR/M
+        */
         // op-size prefix (32 -> 16)
-        inline void EmitOpsizePrefix(void);
-
+        void EmitOpsizePrefix(void);
         // addr-size prefix (64 -> 32)
-        inline void EmitAddrsizePrefix(void);
-
-        inline void SetREG(uint8_t & ModRM, const uint8_t Reg);
-
-        inline void SetRM(uint8_t & ModRM, const uint8_t RM);
-
-        inline void SetModRM_Access(uint8_t & ModRM, const ModType Access);
-
-        inline void SetModRM_Register(uint8_t & ModRM, GpReg Register, const bool IsRM, const bool ShouldEmitREX = true);
+        void EmitAddrsizePrefix(void);
+        void SetREG(uint8_t & ModRM, const uint8_t Reg);
+        void SetRM(uint8_t & ModRM, const uint8_t RM);
+        void SetModRM_Access(uint8_t & ModRM, const ModType Access);
+        void SetModRM_Register(uint8_t & ModRM, const GpReg Register, const bool IsRM, const bool ShouldEmitREX = true);
     public:
         void Mov(const GpReg Dest, const uint8_t Imm);
         void Mov(const GpReg Dest, const uint16_t Imm);
@@ -621,6 +639,15 @@ class Tachyon_AMD64Encoder : public Tachyon_EncoderImpl {
 
         void Mov(const Mem Dest, const GpReg Src);
 
+        void Push(const GpReg Register);
+        void Push(uint8_t Imm);
+        void Push(uint32_t Imm);
+
+        void Pop(const GpReg Register);
+
+        void RelCall(const int32_t Disp32);
+        void RelCall(const int16_t Disp16);
+
         void Ret(void);
-        void Ret(uint16_t Bytes);
+        void Ret(const uint16_t Bytes);
 };

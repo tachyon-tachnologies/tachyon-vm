@@ -11,7 +11,7 @@
 #include <Tachyon/Events.hpp>
 #include <Tachyon/Tachyon.hpp>
 
-static Tachyon::VirtualMachine VM;
+static Tachyon::Tachyon_VirtualMachine VM;
 static bool TachyonInitialized = false;
 
 int Tachyon::Init(void) {
@@ -44,12 +44,12 @@ int Tachyon::Init(void) {
     Scratch::Events::RegisterAll();
     Tachyon::Pseudo::RegisterAll();
     /* EXPERIMENTAL FEATURE */
-    VM.Configuration |= TACHYON_CFG_PBLOCK;
+    VM.Configuration = (TACHYON_CFG_PBLOCK | TACHYON_CFG_SHITTALK);
     TachyonInitialized = true;
     return 0;
 }
 
-Tachyon::VirtualMachine * Tachyon::GetVM(void) {
+Tachyon::Tachyon_VirtualMachine * Tachyon::GetVM(void) {
     return &VM;
 }
 

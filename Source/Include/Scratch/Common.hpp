@@ -50,7 +50,6 @@ namespace Scratch {
         std::vector<ProcedureBindings> ParamBindings;
         ScratchSprite * Sprite;
         ScratchStatus CurrentStatus;
-        Tachyon_VMState State;
         uint8_t ControlFlags;
     };
 

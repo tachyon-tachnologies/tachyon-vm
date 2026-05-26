@@ -8,6 +8,9 @@ To compile the Tachyon VM, you first need to perform the following prerequisites
 
 Let us start with installing the required libraries for Tachyon's VM.
 
+## Prerequisites
+Before you start, please install ninja. If you're on Windows, please run the following command ``winget install -e --id Ninja-build.Ninja``
+
 ## Installing necessary libraries
 Tachyon's VM requires SDL3, and libzip to be installed in order to compile successfully. To install the libraries, follow the directions below:
 
@@ -16,4 +19,4 @@ Tachyon's VM requires SDL3, and libzip to be installed in order to compile succe
 3. Then, run ``vcpkg integrate install`` to be able to install libraries system-wide.
 4. Now, you can install the two dependencies: ``vcpkg install sdl3:x64-windows libzip:x64-windows`` for Windows systems, or ``vcpkg install sdl3:x64-linux libzip:x64-linux`` for UNIX-esque systems.
 
-Now that you've got that done, you may now run ``cmake`` to build the Tachyon's VM.
+Now that you've got that done, you may now run ``cmake -B build`` to build Tachyon.
