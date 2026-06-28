@@ -1,38 +1,38 @@
-#include <Tachyon/Encoder.hpp>
+#include <Tachyon/Assembler.hpp>
 #include <Tachyon/Debug.hpp>
 #include <cstdint>
 
 // Immediate to register versions
 
-void Tachyon_AMD64Encoder::Mov(const GpReg Dest, uint8_t Src) {
+void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, uint8_t Src) {
+    TachyonAssertMsg(Dest.Is8bit() == true, "Invalid combination of operands. Should be mov r8, imm8\n");
     uint8_t Opcode = 0b10110000;
     SetModRM_Register(Opcode, Dest, true);
-    TachyonAssertMsg(Dest.Is8bit() == true, "Invalid combination of operands. Should be mov r8, imm8");
     this->Write8(Opcode);
     this->Write8(Src);
 }
 
-void Tachyon_AMD64Encoder::Mov(const GpReg Dest, uint16_t Src) {
+void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, uint16_t Src) {
+    TachyonAssertMsg(Dest.Is16bit() == true, "Invalid combination of operands. Should be mov r16, imm16\n");
     uint8_t Opcode = 0b10111000;
     this->EmitOpsizePrefix();
     SetModRM_Register(Opcode, Dest, true);
-    TachyonAssertMsg(Dest.Is16bit() == true, "Invalid combination of operands. Should be mov r16, imm16");
     this->Write8(Opcode);
     this->Write16(Src);
 }
 
-void Tachyon_AMD64Encoder::Mov(const GpReg Dest, uint32_t Src) {
+void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, uint32_t Src) {
+    TachyonAssertMsg(Dest.Is32bit() == true, "Invalid combination of operands. Should be mov r32, imm32\n");
     uint8_t Opcode = 0b10111000;
     SetModRM_Register(Opcode, Dest, true);
-    TachyonAssertMsg(Dest.Is32bit() == true, "Invalid combination of operands. Should be mov r32, imm32");
     this->Write8(Opcode);
     this->Write32(Src);
 }
 
-void Tachyon_AMD64Encoder::Mov(const GpReg Dest, uint64_t Src) {
+void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, uint64_t Src) {
+    TachyonAssertMsg(Dest.Is64bit() == true, "Invalid combination of operands. Should be movabs r64, imm64\n");
     uint8_t Opcode = 0b10111000;
     SetModRM_Register(Opcode, Dest, true);
-    TachyonAssertMsg(Dest.Is64bit() == true, "Invalid combination of operands. Should be mov r64, imm64");
     this->Write8(Opcode);
     this->Write64(Src);
 }
@@ -41,11 +41,11 @@ void Tachyon_AMD64Encoder::Mov(const GpReg Dest, uint64_t Src) {
 
 // mov r/m, reg
 // 8-bit, 16-bit, 32-bit, and 64-bit
-void Tachyon_AMD64Encoder::Mov(const Mem Dest, const GpReg Src) {
+void Tachyon_AssemblerAMD64::Mov(const Mem & Dest, const GpReg & Src) {
     /* address size, operand size, and finally REX */
     if (Dest.IsRegister()) {
         const GpReg Register = Dest.GetRegister();
-        TachyonAssertMsg(Register.Is16bit() == false && Register.Is8bit() == false, "Invalid address! Should be either a BYTE PTR, DWORD PTR, QWORD PTR!");
+        TachyonAssertMsg(Register.Is16bit() == false && Register.Is8bit() == false, "Invalid address! Should be either a BYTE PTR, DWORD PTR, QWORD PTR!\n");
         if (Register.RequiresAddrsizePrefix() == true) {
             this->EmitAddrsizePrefix();
         }
@@ -55,7 +55,8 @@ void Tachyon_AMD64Encoder::Mov(const Mem Dest, const GpReg Src) {
     if (Src.Is16bit()) {
         this->EmitOpsizePrefix();
     }
-    this->SetREX_RegExtension(REX, Src.Is64bit());
+    this->SetREX_Opsize(REX, Src.Is64bit());
+    this->SetREX_RegExtension(REX, Src.RequiresREX());
     /* opcode */
     uint8_t TargetOpcode = Src.Is8bit() == true ? TargetOpcode = 0x88 : TargetOpcode = 0x89;
     /* modr/m */
@@ -65,7 +66,7 @@ void Tachyon_AMD64Encoder::Mov(const Mem Dest, const GpReg Src) {
     switch (Dest.GetType()) {
         case Mem::MEM_REG: {
             GpReg Reg = Dest.GetRegister();
-            this->SetREX_BaseExtension(REX, Reg.Is64bit());
+            this->SetREX_BaseExtension(REX, Reg.RequiresREX());
             // something was changed in the rex byte. use it
             if (REX != 0x40) {
                 this->Write8(REX);
@@ -89,14 +90,14 @@ void Tachyon_AMD64Encoder::Mov(const Mem Dest, const GpReg Src) {
             /* [sib] */
             this->SetModRM_Access(ModRM, ModType::NO_DISPLACEMENT);
             this->Write8(ModRM);
-            Mem Dummy(1, GpReg::REG_AL, Reg);
+            Mem Dummy(1, GpReg::AL, Reg);
             this->Write8(Dummy.GetSIB());
             this->Write8(0);
             break;
         }
         case Mem::MEM_REG_DISP: {
             GpRegDisp RegDisp = Dest.GetRegisterDisp();
-            this->SetREX_BaseExtension(REX, RegDisp.first.Is64bit());
+            this->SetREX_BaseExtension(REX, RegDisp.first.RequiresREX());
             // something was changed in the rex byte. use it
             if (REX != 0x40) {
                 this->Write8(REX);
@@ -113,8 +114,8 @@ void Tachyon_AMD64Encoder::Mov(const Mem Dest, const GpReg Src) {
 
             if (RegDisp.first.IsSP() == false) {
                 /* [r/m + disp8/disp32] */
-                if (std::holds_alternative<int32_t>(RegDisp.second)) {
-                    uint32_t Disp32 = (uint32_t)std::get<int32_t>(RegDisp.second);
+                if (auto DispPtr = std::get_if<int32_t>(&RegDisp.second)) {
+                    uint32_t Disp32 = static_cast<uint32_t>(*DispPtr);
                     this->Write32(Disp32);
                     return;
                 }
@@ -123,11 +124,11 @@ void Tachyon_AMD64Encoder::Mov(const Mem Dest, const GpReg Src) {
                 return;
             }
             /* [sib + disp8/disp32] */
-            Mem Dummy(1, GpReg::REG_AL, RegDisp.first);
+            Mem Dummy(1, GpReg::AL, RegDisp.first);
             this->Write8(Dummy.GetSIB());
 
-            if (std::holds_alternative<int32_t>(RegDisp.second)) {
-                uint32_t Disp32 = (uint32_t)std::get<int32_t>(RegDisp.second);
+            if (auto DispPtr = std::get_if<int32_t>(&RegDisp.second)) {
+                uint32_t Disp32 = static_cast<uint32_t>(*DispPtr);
                 this->Write32(Disp32);
                 return;
             }
@@ -138,7 +139,7 @@ void Tachyon_AMD64Encoder::Mov(const Mem Dest, const GpReg Src) {
         }
         case Mem::MEM_SIB: {
             // TODO: this should be easy
-            TachyonUnimplemented("SIB encoding\n");
+            TachyonUnimplemented("SIB encoding\n\n");
             __builtin_unreachable();
             break;
         }

@@ -1,7 +1,7 @@
 #include <Common.hpp>
 #include <Scratch/Common.hpp>
 #include <Tachyon/Debug.hpp>
-#include <Tachyon/Encoder.hpp>
+#include <Tachyon/Assembler.hpp>
 #include <Tachyon/Tachyon.hpp>
 #include <iostream>
 
@@ -16,10 +16,7 @@ int main(int argc, char * argv[]) {
         return -1;
     }
     /* initialize tachyon */
-    if (Tachyon::Init() < 0) {
-        std::cout << SDL_GetError() << std::endl;
-        return -1;
-    }
+    Tachyon::Init();
     /* verify that the project exists, and parse the project */
     Scratch::ScratchProject MainProject = Scratch::ScratchProject(argv[1]);
     if (MainProject.IsLoaded() == false) {
@@ -30,11 +27,15 @@ int main(int argc, char * argv[]) {
         std::cout << "Failed to parse project contents" << std::endl;
         return -1;
     }
+    /* initialize sdl3 */
+    if (Tachyon::InitWindow() == false) {
+        std::cout << SDL_GetError() << std::endl;
+        return -1;
+    }
+    /* now we can do something */
     Tachyon::InitializeScheduler(MainProject);
     DebugInfo("Beginning execution..\n");
     Tachyon::MainLoop();
-    /* die tachyon, die */
     Tachyon::Quit();
     return 0;
-    /* global deconstructors do most of the project memory deallocation work for us */
 }

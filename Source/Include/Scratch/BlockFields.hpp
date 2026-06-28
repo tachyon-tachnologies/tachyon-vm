@@ -1,12 +1,46 @@
 #pragma once
 
-#include <Scratch/Data.hpp>
+#include <type_traits>
 #include <string>
 #include <cstdint>
 #include <variant>
+#include <Scratch/Data.hpp>
+#include <Lib/SIMDJson.h>
+#include <Lib/NanBox.hpp>
+
+using namespace NanBox;
 
 namespace Scratch {
+    class ScratchSprite;
     class ScratchBlock;
+    /*
+     * Field object
+     */
+
+    enum class FieldType : uint8_t { VariableField, ListField, StringField, BroadcastOption, InvalidField };
+
+    /**
+     * Scratch field descriptor
+     */
+    class ScratchField {
+        public:
+            constexpr bool IsType(FieldType Type) const {
+                return (this->Type == Type);
+            }
+
+            ScratchField(ScratchBlock & Owner, std::string & Key, simdjson::ondemand::array & FieldObject);
+
+            std::variant<ScratchList *, ScratchVariable *, std::string> Field;
+        private:
+            void ParseDataField(simdjson::ondemand::array & FieldObject, ScratchBlock & Block);
+            void ParseBroadcastField(simdjson::ondemand::array & FieldObject);
+            void ParseStringOption(simdjson::ondemand::array & FieldObject);
+            FieldType Type;
+    };
+
+    /*
+     * Input object
+     */
 
     enum class ScratchShadow : uint8_t {
         INPUT_SAME_BLOCK_SHADOW = 1,
@@ -27,45 +61,52 @@ namespace Scratch {
         INPUT_LIST
     };
 
-    /*
-     * Field object
-     */
-
-    /* variable field */
-    struct Field_Variable {
-        std::string VariableName;
-        std::string VariableKey;
-        bool IsList;
-    };
-    /**
-     * Scratch field descriptor
-     */
-    struct ScratchField {
-        std::variant<Field_Variable, std::string> Field;
-        enum class FieldType : uint8_t { VariableField, ListField, StringField, BroadcastOption, InvalidField } Type;
-    };
-
-    /*
-     * Input object
-     */
-
     /* value input */
     struct Input_Value {
-        std::variant<ScratchData, Field_Variable, std::string> Value;
+        std::variant<BoxedValue, ScratchList *, ScratchVariable *, std::string> Value;
         ScratchPrimitive PrimitiveType;
     };
 
     /* operand input */
     struct Input_Operand {
-        ScratchData OperandValue;
+        BoxedValue OperandValue;
         ScratchPrimitive PrimitiveType;
     };
 
-    struct ScratchInput {
-        std::variant<Input_Value, std::string> Input;
-        std::string ReporterKey;
-        enum class InputType : uint8_t { ConditionInput, SubstackInput, ProcedureDefinition, ValueInput, BroadcastInput, InvalidInput } Type;
-        ScratchShadow ShadowType;
-        bool HasReporter;
+    enum class InputType : uint8_t { ConditionInput, SubstackInput, ProcedureDefinition, ValueInput, BroadcastInput, InvalidInput };
+
+    /**
+     * Scratch input descriptor
+     */
+    class ScratchInput {
+        public:
+            constexpr bool IsType(InputType Type) const {
+                return this->Type == Type;
+            }
+
+            constexpr InputType GetType(void) const {
+                return this->Type;
+            }
+
+            constexpr bool IsReporter(void) const {
+                return this->Reporter;
+            }
+
+            constexpr ScratchBlock * GetReporterBlock(void) {
+                return this->ReporterBlock;
+            }
+
+            ScratchInput(ScratchBlock & Owner, std::string & Key, simdjson::ondemand::array & InputObject);
+
+            std::variant<Input_Value, std::string> Input;
+        private:
+            void ParseValueInput(ScratchSprite & Owner, simdjson::ondemand::array & InputObject);
+            void ParseProcedureDefinition(simdjson::ondemand::array & InputObject);
+            void ParseControlInput(simdjson::ondemand::array & InputObject);
+
+            ScratchBlock * ReporterBlock = nullptr;
+            InputType Type;
+            ScratchShadow ShadowType;
+            bool Reporter;
     };
 };

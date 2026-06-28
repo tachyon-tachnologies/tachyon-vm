@@ -1,25 +1,83 @@
 #pragma once
 
-#include <Lib/Hexdump.hpp>
 #include <Tachyon/Debug.hpp>
 #include <Tachyon/ExMem.hpp>
+#include <Lib/Hexdump.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 #include <optional>
+#include <unordered_map>
+
+#if !defined(__x86_64__)
+#error "Only x86 systems are supported!!"
+#endif
 
 using OutputCode = int (*)(void);
 
-struct Tachyon_JITState {
-    OutputCode EntryPoint = nullptr;
+struct OutputCodeInfo {
+    /**
+     * JIT entry point
+     */
+    OutputCode CodeEntry;
+
+    /**
+     * JIT allocated code size
+     */
+    size_t CodeSize;
+
+    inline void FreeMemory(void) {
+        if (likely(this->CodeEntry)) {
+            Tachyon::FreeJITMemory(reinterpret_cast<void *>(this->CodeEntry), this->CodeSize);
+            this->CodeEntry = nullptr;
+        }
+    }
 };
 
-class Tachyon_EncoderImpl {
+struct AMD64_Registers {
+    uint64_t rbx, rsp, rbp;
+    uint64_t r12, r13, r14, r15;
+};
+
+struct Tachyon_JITState {
+    /**
+     * Info contaning entry point and code size
+     */
+    OutputCodeInfo CodeInfo;
+
+    /**
+     * Only used when the Tachyon debugger is enabled
+     */
+    std::unordered_map<std::string, uintptr_t> BlockMap;
+    
+    /**
+     * CPU register state
+     */
+    AMD64_Registers Registers;
+};
+
+class Label {
+    public:
+        constexpr Label(uint32_t Id, void * Address) : Id(Id), Start(Address) {}
+        constexpr bool operator == (const Label & Other) const {
+            return (this->Id == Other.Id && this->Start == Other.Start);
+        }
+    private:
+        const void * const Start;
+        const uint32_t Id;
+};
+
+class Tachyon_AssemblerBase {
+    private:
+        std::vector<Label> Labels;
+        uint32_t LabelIds = 0;
     protected:
         void * CodeBase;
+        void * Stack;
         uint8_t * CodePointer;
         size_t CodeSize;
         size_t BytesWritten;
@@ -28,46 +86,69 @@ class Tachyon_EncoderImpl {
             *CodePointer++ = Byte;
             BytesWritten++;
         }
+
         inline void Write16(uint16_t Word) {
             memcpy(CodePointer, &Word, 2);
             CodePointer += 2;
             BytesWritten += 2;
         }
+
         inline void Write32(uint32_t Dword) {
             memcpy(CodePointer, &Dword, 4);
             CodePointer += 4;
             BytesWritten += 4;
         }
+
         inline void Write64(uint64_t Qword) {
             memcpy(CodePointer, &Qword, 8);
             CodePointer += 8;
             BytesWritten += 8;
         }
     public:
-        Tachyon_EncoderImpl() {
-            CodeSize = 8192;
-            BytesWritten = 0;
-            CodeBase = Tachyon::AllocateCodeMemory(CodeSize);
-            TachyonAssert(CodeBase != nullptr);
-            CodePointer = static_cast<uint8_t *>(CodeBase);
-            DebugInfo("JIT compiler allocated code range: [%p - %p]\n", CodeBase, CodePointer + CodeSize);
+        Tachyon_AssemblerBase() {
+            this->CodeSize = 8192;
+            this->BytesWritten = 0;
+            /* allocate jit code buffer */
+            this->CodeBase = Tachyon::AllocateJITMemory(this->CodeSize);
+            TachyonAssert(this->Stack != nullptr);
+
+            this->CodePointer = static_cast<uint8_t *>(this->CodeBase);
         }
 
-        ~Tachyon_EncoderImpl() {
-            Tachyon::FreeCodeMemory(CodeBase, CodeSize);
-            CodeBase = CodePointer = nullptr;
-            CodeSize = 0;
-            BytesWritten = 0;
+        ~Tachyon_AssemblerBase() {
+            // assuming ownership has been passed
+            this->CodeBase = this->CodePointer = nullptr;
+            this->CodeSize = 0;
+            this->BytesWritten = 0;
         }
 
-        inline OutputCode MakeExecutable(void) {
-            TachyonAssert(Tachyon::ProtectCodeMemory(CodeBase, CodeSize) == true);
-            Tachyon::PrepareCPUCache(CodeBase, CodeSize);
-            return (OutputCode)CodeBase;
+        /**
+         * Creates a new label.
+         * @returns The newly created label
+         */
+        inline Label CreateLabel(void) {
+            return Label(LabelIds++, this->CodePointer);
+        }
+
+        inline void BindLabel(Label & Label) {
+            this->Labels.emplace_back(std::move(Label));
+        } 
+
+        /**
+         * Makes the JIT code executable and read-only.
+         * Developer note: Please for the love of God, free the code memory once it's used!!
+         * @return A struct containing the generated code, and the code size (in that order).
+         */
+        [[nodiscard]]
+        inline OutputCodeInfo MakeExecutable(void) {
+            TachyonAssert(Tachyon::ProtectJITMemory(this->CodeBase, this->CodeSize) == true);
+            OutputCode Entry = reinterpret_cast<OutputCode>(this->CodeBase);
+            this->CodeDump();
+            return {Entry, this->CodeSize};
         }
 
         inline void CodeDump(void) const {
-            Debug::Hexdump(this->CodeBase, BytesWritten);
+            Debug::Hexdump(this->CodeBase, this->BytesWritten);
         }
 
 };
@@ -85,72 +166,71 @@ class GpReg {
     public:
         enum RegisterKind : uint8_t {
             /* 8-bit low-byte registers */
-            REG_AL, REG_CL, REG_DL, REG_BL, REG_SPL, REG_BPL, REG_SIL, REG_DIL,
-            REG_R8L, REG_R9L, REG_R10L, REG_R11L, REG_R12L, REG_R13L, REG_R14L, REG_R15L,
+            AL, CL, DL, BL, SPL, BPL, SIL, DIL,
+            R8L, R9L, R10L, R11L, R12L, R13L, R14L, R15L,
             /* 8-bit high-byte registers */
-            REG_AH, REG_CH, REG_DH, REG_BH,
+            AH, CH, DH, BH,
             /* 16-bit registers */
-            REG_AX, REG_CX, REG_DX, REG_BX, REG_SP, REG_BP, REG_SI, REG_DI,
-            REG_R8W, REG_R9W, REG_R10W, REG_R11W, REG_R12W, REG_R13W, REG_R14W, REG_R15W,
+            AX, CX, DX, BX, SP, BP, SI, DI,
+            R8W, R9W, R10W, R11W, R12W, R13W, R14W, R15W,
             /* 32-bit registers */
-            REG_EAX, REG_ECX, REG_EDX, REG_EBX, REG_ESP, REG_EBP, REG_ESI, REG_EDI,
-            REG_R8D, REG_R9D, REG_R10D, REG_R11D, REG_R12D, REG_R13D, REG_R14D, REG_R15D,
+            EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI,
+            R8D, R9D, R10D, R11D, R12D, R13D, R14D, R15D,
             /* 64-bit registers */
-            REG_RAX, REG_RCX, REG_RDX, REG_RBX, REG_RSP, REG_RBP, REG_RSI, REG_RDI,
-            REG_R8, REG_R9, REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15,
+            RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI,
+            R8, R9, R10, R11, R12, R13, R14, R15,
         };
 
         GpReg() = default;
-
         constexpr GpReg(const GpReg::RegisterKind Reg) : Value(Reg) {
             /* cache regid */
             switch (this->Value) {
                 /* 8-bit */
-                case GpReg::REG_AL...GpReg::REG_BL: {
+                case GpReg::AL...GpReg::BL: {
                     this->RegId = this->Value & 0b111;
                     break;
                 }
-                case GpReg::REG_AH...GpReg::REG_BH: {
-                    this->RegId = (this->Value - GpReg::REG_AH) & 0b111;
+                case GpReg::AH...GpReg::BH: {
+                    this->RegId = (this->Value - GpReg::AH) & 0b111;
                     break;
                 }
                 /* 8-bit REX extended */
-                case GpReg::REG_SPL...GpReg::REG_DIL: {
+                case GpReg::SPL...GpReg::DIL: {
                     this->RegId = this->Value & 0b111;
                     break;
                 }
-                case GpReg::REG_R8L...GpReg::REG_R15L: {
-                    this->RegId = (this->Value - GpReg::REG_R8L) & 0b111;
+                case GpReg::R8L...GpReg::R15L: {
+                    this->RegId = (this->Value - GpReg::R8L) & 0b111;
                     break;
                 }
                 /* 16-bit */
-                case GpReg::REG_AX...GpReg::REG_DI: {
-                    this->RegId = (this->Value - GpReg::REG_AX) & 0b111;
+                case GpReg::AX...GpReg::DI: {
+                    this->RegId = (this->Value - GpReg::AX) & 0b111;
                     break;
                 }
                 /* 16-bit REX extended */
-                case GpReg::REG_R8W...GpReg::REG_R15W: {
-                    this->RegId = (this->Value - GpReg::REG_R8W) & 0b111;
+                case GpReg::R8W...GpReg::R15W: {
+                    this->RegId = (this->Value - GpReg::R8W) & 0b111;
                     break;
                 }
                 /* 32-bit */
-                case GpReg::REG_EAX...GpReg::REG_EDI: {
-                    this->RegId = (this->Value - GpReg::REG_EAX) & 0b111;
+                case GpReg::EAX...GpReg::EDI: {
+                    this->RegId = (this->Value - GpReg::EAX) & 0b111;
                     break;
                 }
                 /* 32-bit REX extended */
-                case GpReg::REG_R8D...GpReg::REG_R15D: {
-                    this->RegId = (this->Value - GpReg::REG_R8D) & 0b111;
+                case GpReg::R8D...GpReg::R15D: {
+                    this->RegId = (this->Value - GpReg::R8D) & 0b111;
                     break;
                 }
                 /* 64-bit */
-                case GpReg::REG_RAX...GpReg::REG_RDI: {
-                    this->RegId = ((this->Value) - GpReg::REG_RAX) & 0b111;
+                case GpReg::RAX...GpReg::RDI: {
+                    this->RegId = ((this->Value) - GpReg::RAX) & 0b111;
                     break;
                 }
                 /* 64-bit REX extended */
-                case GpReg::REG_R8...GpReg::REG_R15: {
-                    this->RegId = (this->Value - GpReg::REG_R8) & 0b111;
+                case GpReg::R8...GpReg::R15: {
+                    this->RegId = (this->Value - GpReg::R8) & 0b111;
                     break;
                 }
                 default: {
@@ -167,11 +247,11 @@ class GpReg {
             return this->Value;
         }
 
-        constexpr bool operator == (const GpReg::RegisterKind Reg) const {
+        constexpr bool operator == (const GpReg::RegisterKind & Reg) const {
             return this->Value == Reg;
         }
 
-        constexpr bool operator != (const GpReg::RegisterKind Reg) const {
+        constexpr bool operator != (const GpReg::RegisterKind & Reg) const {
             return this->Value != Reg;
         }
 
@@ -181,7 +261,7 @@ class GpReg {
         /* register bit widths */
         constexpr bool Is64bit(void) const {
             switch (this->Value) {
-                case GpReg::REG_RAX...GpReg::REG_R15: {
+                case GpReg::RAX...GpReg::R15: {
                     return true;
                 }
                 default: {
@@ -191,7 +271,7 @@ class GpReg {
         }
         constexpr bool Is32bit(void) const {
             switch (this->Value) {
-                case GpReg::REG_EAX...GpReg::REG_R15D: {
+                case GpReg::EAX...GpReg::R15D: {
                     return true;
                 }
                 default: {
@@ -201,7 +281,7 @@ class GpReg {
         }
         constexpr bool Is16bit(void) const {
             switch (this->Value) {
-                case GpReg::REG_AX...GpReg::REG_R15W: {
+                case GpReg::AX...GpReg::R15W: {
                     return true;
                 }
                 default: {
@@ -211,7 +291,7 @@ class GpReg {
         }
         constexpr bool Is8bit(void) const {
             switch (this->Value) {
-                case GpReg::REG_AL...GpReg::REG_R15L: {
+                case GpReg::AL...GpReg::R15L: {
                     return true;
                 }
                 default: {
@@ -223,11 +303,11 @@ class GpReg {
         constexpr bool RequiresREX(void) const {
             switch (this->Value) {
                 /* fallthrough stack */
-                case GpReg::REG_SPL...GpReg::REG_DIL:
-                case GpReg::REG_R8L...GpReg::REG_R15L:
-                case GpReg::REG_R8W...GpReg::REG_R15W:
-                case GpReg::REG_R8D...GpReg::REG_R15D:
-                case GpReg::REG_R8...GpReg::REG_R15: {
+                case GpReg::SPL...GpReg::DIL:
+                case GpReg::R8L...GpReg::R15L:
+                case GpReg::R8W...GpReg::R15W:
+                case GpReg::R8D...GpReg::R15D:
+                case GpReg::R8...GpReg::R15: {
                     return true;
                 }
                 default: {
@@ -239,11 +319,11 @@ class GpReg {
         /* AL, AH, AX, EAX, RAX */
         constexpr bool IsAX(void) const {
             switch (this->RegId) {
-                case GpReg::REG_AL:
-                case GpReg::REG_AH:
-                case GpReg::REG_AX:
-                case GpReg::REG_EAX:
-                case GpReg::REG_RAX: {
+                case GpReg::AL:
+                case GpReg::AH:
+                case GpReg::AX:
+                case GpReg::EAX:
+                case GpReg::RAX: {
                     return true;
                 }
                 default: {
@@ -255,11 +335,11 @@ class GpReg {
         /* CL, CH, CX, ECX, RCX */
         constexpr bool IsCX(void) const {
             switch (this->Value) {
-                case GpReg::REG_CL:
-                case GpReg::REG_CH:
-                case GpReg::REG_CX:
-                case GpReg::REG_ECX:
-                case GpReg::REG_RCX: {
+                case GpReg::CL:
+                case GpReg::CH:
+                case GpReg::CX:
+                case GpReg::ECX:
+                case GpReg::RCX: {
                     return true;
                 }
                 default: {
@@ -271,11 +351,11 @@ class GpReg {
         /* DL, DH, DX, EDX, RDX */
         constexpr bool IsDX(void) const {
             switch (this->Value) {
-                case GpReg::REG_DL:
-                case GpReg::REG_DH:
-                case GpReg::REG_DX:
-                case GpReg::REG_EDX:
-                case GpReg::REG_RDX: {
+                case GpReg::DL:
+                case GpReg::DH:
+                case GpReg::DX:
+                case GpReg::EDX:
+                case GpReg::RDX: {
                     return true;
                 }
                 default: {
@@ -287,11 +367,11 @@ class GpReg {
         /* BL, BH, BX, EBX, RBX */
         constexpr bool IsBX(void) const {
             switch (this->Value) {
-                case GpReg::REG_BL:
-                case GpReg::REG_BH:
-                case GpReg::REG_BX:
-                case GpReg::REG_EBX:
-                case GpReg::REG_RBX: {
+                case GpReg::BL:
+                case GpReg::BH:
+                case GpReg::BX:
+                case GpReg::EBX:
+                case GpReg::RBX: {
                     return true;
                 }
                 default: {
@@ -303,10 +383,10 @@ class GpReg {
         /* SIL, SI, ESI, RSI */
         constexpr bool IsSI(void) const {
             switch (this->Value) {
-                case GpReg::REG_SIL:
-                case GpReg::REG_SI:
-                case GpReg::REG_ESI:
-                case GpReg::REG_RSI: {
+                case GpReg::SIL:
+                case GpReg::SI:
+                case GpReg::ESI:
+                case GpReg::RSI: {
                     return true;
                 }
                 default: {
@@ -318,10 +398,10 @@ class GpReg {
         /* DIL, DI, EDI, RDI */
         constexpr bool IsDI(void) const {
             switch (this->Value) {
-                case GpReg::REG_DIL:
-                case GpReg::REG_DI:
-                case GpReg::REG_EDI:
-                case GpReg::REG_RDI: {
+                case GpReg::DIL:
+                case GpReg::DI:
+                case GpReg::EDI:
+                case GpReg::RDI: {
                     return true;
                 }
                 default: {
@@ -333,10 +413,10 @@ class GpReg {
         /* SPL, SP, ESP, RSP */
         constexpr bool IsSP(void) const {
             switch (this->Value) {
-                case GpReg::REG_SPL:
-                case GpReg::REG_SP:
-                case GpReg::REG_ESP:
-                case GpReg::REG_RSP: {
+                case GpReg::SPL:
+                case GpReg::SP:
+                case GpReg::ESP:
+                case GpReg::RSP: {
                     return true;
                 }
                 default: {
@@ -348,10 +428,10 @@ class GpReg {
         /* BPL, BP, EBP, RBP */
         constexpr bool IsBP(void) const {
             switch (this->Value) {
-                case GpReg::REG_BPL:
-                case GpReg::REG_BP:
-                case GpReg::REG_EBP:
-                case GpReg::REG_RBP: {
+                case GpReg::BPL:
+                case GpReg::BP:
+                case GpReg::EBP:
+                case GpReg::RBP: {
                     return true;
                 }
                 default: {
@@ -363,10 +443,10 @@ class GpReg {
         /* R8L, R8W, R8D, R8 */
         constexpr bool IsR8(void) const {
             switch (this->Value) {
-                case GpReg::REG_R8L:
-                case GpReg::REG_R8W:
-                case GpReg::REG_R8D:
-                case GpReg::REG_R8: {
+                case GpReg::R8L:
+                case GpReg::R8W:
+                case GpReg::R8D:
+                case GpReg::R8: {
                     return true;
                 }
                 default: {
@@ -378,10 +458,10 @@ class GpReg {
         /* R9L, R9W, R9D, R9 */
         constexpr bool IsR9(void) const {
             switch (this->Value) {
-                case GpReg::REG_R9L:
-                case GpReg::REG_R9W:
-                case GpReg::REG_R9D:
-                case GpReg::REG_R9: {
+                case GpReg::R9L:
+                case GpReg::R9W:
+                case GpReg::R9D:
+                case GpReg::R9: {
                     return true;
                 }
                 default: {
@@ -393,10 +473,10 @@ class GpReg {
         /* R10L, R10W, R10D, R10 */
         constexpr bool IsR10(void) const {
             switch (this->Value) {
-                case GpReg::REG_R10L:
-                case GpReg::REG_R10W:
-                case GpReg::REG_R10D:
-                case GpReg::REG_R10: {
+                case GpReg::R10L:
+                case GpReg::R10W:
+                case GpReg::R10D:
+                case GpReg::R10: {
                     return true;
                 }
                 default: {
@@ -408,10 +488,10 @@ class GpReg {
         /* R11L, R11W, R11D, R11 */
         constexpr bool IsR11(void) const {
             switch (this->Value) {
-                case GpReg::REG_R11L:
-                case GpReg::REG_R11W:
-                case GpReg::REG_R11D:
-                case GpReg::REG_R11: {
+                case GpReg::R11L:
+                case GpReg::R11W:
+                case GpReg::R11D:
+                case GpReg::R11: {
                     return true;
                 }
                 default: {
@@ -423,10 +503,10 @@ class GpReg {
         /* R12L, R12W, R12D, R12 */
         constexpr bool IsR12(void) const {
             switch (this->Value) {
-                case GpReg::REG_R12L:
-                case GpReg::REG_R12W:
-                case GpReg::REG_R12D:
-                case GpReg::REG_R12: {
+                case GpReg::R12L:
+                case GpReg::R12W:
+                case GpReg::R12D:
+                case GpReg::R12: {
                     return true;
                 }
                 default: {
@@ -438,10 +518,10 @@ class GpReg {
         /* R13L, R13W, R13D, R13 */
         constexpr bool IsR13(void) const {
             switch (this->Value) {
-                case GpReg::REG_R13L:
-                case GpReg::REG_R13W:
-                case GpReg::REG_R13D:
-                case GpReg::REG_R13: {
+                case GpReg::R13L:
+                case GpReg::R13W:
+                case GpReg::R13D:
+                case GpReg::R13: {
                     return true;
                 }
                 default: {
@@ -453,10 +533,10 @@ class GpReg {
         /* R14L, R14W, R14D, R14 */
         constexpr bool IsR14(void) const {
             switch (this->Value) {
-                case GpReg::REG_R14L:
-                case GpReg::REG_R14W:
-                case GpReg::REG_R14D:
-                case GpReg::REG_R14: {
+                case GpReg::R14L:
+                case GpReg::R14W:
+                case GpReg::R14D:
+                case GpReg::R14: {
                     return true;
                 }
                 default: {
@@ -468,10 +548,10 @@ class GpReg {
         /* R15L, R15W, R15D, R15 */
         constexpr bool IsR15(void) const {
             switch (this->Value) {
-                case GpReg::REG_R15L:
-                case GpReg::REG_R15W:
-                case GpReg::REG_R15D:
-                case GpReg::REG_R15: {
+                case GpReg::R15L:
+                case GpReg::R15W:
+                case GpReg::R15D:
+                case GpReg::R15: {
                     return true;
                 }
                 default: {
@@ -524,7 +604,7 @@ class Mem {
             MEM_REG_DISP,
         };
 
-        Mem(const uint8_t S, const GpReg I, const GpReg B) : AccessType(Mem::MEM_SIB) {
+        constexpr Mem(const uint8_t S, const GpReg I, const GpReg B) : AccessType(Mem::MEM_SIB) {
             this->Value = (struct Sib){
                 S,
                 I,
@@ -533,7 +613,7 @@ class Mem {
             };
         }
 
-        Mem(const uint8_t S, const GpReg I, const GpReg B, const int32_t Displacement) : AccessType(Mem::MEM_SIB) {
+        constexpr Mem(const uint8_t S, const GpReg I, const GpReg B, const int32_t Displacement) : AccessType(Mem::MEM_SIB) {
             this->Value = (struct Sib){
                 S,
                 I,
@@ -542,8 +622,8 @@ class Mem {
             };
         }
 
-        // for displacement only, make S=0, I=GpReg::REG_SP, B=GpReg::REG_BP
-        Mem(const uint8_t S, const GpReg I, const GpReg B, const int8_t Displacement) : AccessType(Mem::MEM_SIB) {
+        // for displacement only, make S=0, I=GpReg::SP, B=GpReg::BP
+        constexpr Mem(const uint8_t S, const GpReg I, const GpReg B, const int8_t Displacement) : AccessType(Mem::MEM_SIB) {
             this->Value = (struct Sib){
                 S,
                 I,
@@ -552,15 +632,15 @@ class Mem {
             };
         }
 
-        Mem(const GpReg Register) : AccessType(Mem::MEM_REG) {
+        constexpr Mem(const GpReg Register) : AccessType(Mem::MEM_REG) {
             this->Value = Register;
         }
 
-        Mem(const GpReg Register, const int32_t Displacement) : AccessType(Mem::MEM_REG_DISP) {
+        constexpr Mem(const GpReg Register, const int32_t Displacement) : AccessType(Mem::MEM_REG_DISP) {
             this->Value = GpRegDisp(Register, Displacement);
         }
 
-        Mem(const GpReg Register, const int8_t Displacement) : AccessType(Mem::MEM_REG_DISP) {
+        constexpr Mem(const GpReg Register, const int8_t Displacement) : AccessType(Mem::MEM_REG_DISP) {
             this->Value = GpRegDisp(Register, Displacement);
         }
 
@@ -577,7 +657,7 @@ class Mem {
         }
 
         constexpr uint8_t GetSIB(void) const {
-            TachyonAssertMsg(this->IsSIB() == true, "Invalid memory access type! Expected SIB type.");
+            TachyonAssertMsg(this->IsSIB() == true, "Invalid memory access type! Expected SIB type.\n");
             const struct Sib & Sib = std::get<struct Sib>(this->Value);
             return (Sib.Scale & 0b11) << 6 |
                    (Sib.Index.AsRegID() & 0b111) << 3 |
@@ -590,18 +670,18 @@ class Mem {
         }
 
         constexpr Disp GetSIBDisplacement(void) const {
-            TachyonAssertMsg(this->IsSIB() == true, "Invalid memory access type! Expected SIB type.");
+            TachyonAssertMsg(this->IsSIB() == true, "Invalid memory access type! Expected SIB type.\n");
             const struct Sib & Sib = std::get<struct Sib>(this->Value);
             return Sib.Displacement.value_or(Disp(0));
         }
 
         constexpr const GpReg GetRegister(void) const {
-            TachyonAssertMsg(this->IsRegister() == true, "Invalid memory access type! Expected register type.");
+            TachyonAssertMsg(this->IsRegister() == true, "Invalid memory access type! Expected register type.\n");
             return std::get<GpReg>(this->Value);
         }
 
         constexpr const GpRegDisp GetRegisterDisp(void) const {
-            TachyonAssertMsg(this->IsRegisterDisp() == true, "Invalid memory access type! Expected register with displacement type.");
+            TachyonAssertMsg(this->IsRegisterDisp() == true, "Invalid memory access type! Expected register with displacement type.\n");
             return std::get<GpRegDisp>(this->Value);
         }
         
@@ -614,13 +694,17 @@ class Mem {
         std::variant<struct Sib, GpReg, GpRegDisp> Value;
 };
 
-class Tachyon_AMD64Encoder : public Tachyon_EncoderImpl {
+/**
+ * Tachyon's AMD64 (x86_64) assembler.
+ */
+class Tachyon_AssemblerAMD64 : public Tachyon_AssemblerBase {
     // https://wiki.osdev.org/X86-64_Instruction_Encoding
     private:
         /*
             REX
         */
         void EmitREX(const bool Opsize64, const bool R, const bool X, const bool B);
+        uint8_t InitRegsREX(const GpReg & Reg1, const GpReg & Reg2);
         void SetREX_Opsize(uint8_t & REX, const bool Opsize64);
         void SetREX_RegExtension(uint8_t & REX, const bool R);
         void SetREX_SIBExtension(uint8_t & REX, const bool X);
@@ -635,20 +719,36 @@ class Tachyon_AMD64Encoder : public Tachyon_EncoderImpl {
         void SetREG(uint8_t & ModRM, const uint8_t Reg);
         void SetRM(uint8_t & ModRM, const uint8_t RM);
         void SetModRM_Access(uint8_t & ModRM, const ModType Access);
-        void SetModRM_Register(uint8_t & ModRM, const GpReg Register, const bool IsRM, const bool ShouldEmitREX = true);
+        void SetModRM_Register(uint8_t & ModRM, const GpReg & Register, const bool IsRM, const bool ShouldEmitREX = true);
     public:
-        void Mov(const GpReg Dest, const uint8_t Imm);
-        void Mov(const GpReg Dest, const uint16_t Imm);
-        void Mov(const GpReg Dest, const uint32_t Imm);
-        void Mov(const GpReg Dest, const uint64_t Imm);
+        /*
+            Commonly used functions
+        */
 
-        void Mov(const Mem Dest, const GpReg Src);
+        void EmitMainPrologue(Tachyon_JITState & State);
+        void EmitMainEpilogue(void);
+        
+        /*
+            Arithmetic
+        */
 
-        void Push(const GpReg Register);
+        void Xor(const GpReg & Operand1, const GpReg & Operand2);
+
+        void Add(const GpReg & Reg, uint8_t Imm);
+        void Sub(const GpReg & Reg, uint8_t Imm);
+
+        void Mov(const GpReg & Dest, const uint8_t Imm);
+        void Mov(const GpReg & Dest, const uint16_t Imm);
+        void Mov(const GpReg & Dest, const uint32_t Imm);
+        void Mov(const GpReg & Dest, const uint64_t Imm);
+
+        void Mov(const Mem & Dest, const GpReg & Src);
+
+        void Push(const GpReg & Register);
         void Push(uint8_t Imm);
         void Push(uint32_t Imm);
 
-        void Pop(const GpReg Register);
+        void Pop(const GpReg & Register);
 
         void RelCall(const int32_t Disp32);
         void RelCall(const int16_t Disp16);
@@ -656,3 +756,7 @@ class Tachyon_AMD64Encoder : public Tachyon_EncoderImpl {
         void Ret(void);
         void Ret(const uint16_t Bytes);
 };
+
+#if defined(__x86_64__)
+using TachyonAssembler = Tachyon_AssemblerAMD64;
+#endif

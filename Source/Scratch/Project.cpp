@@ -8,35 +8,39 @@
 using namespace simdjson;
 using namespace Scratch;
 
+void __hot ScratchSprite::CachePointers(void) {
+    for(auto & Item : this->GreenFlags) {
+        ScratchBlock * GreenFlagBlock = Item.second.get();
+        TachyonAssert(GreenFlagBlock != nullptr);
+
+        ScratchBlock * Block = GreenFlagBlock;
+        ScratchBlock * LastBlock = nullptr;
+        
+        while(Block) {
+            if (LastBlock) {
+                LastBlock->NextBlock_Pointer = Block;
+            }
+            LastBlock = Block;
+            Block = this->GetBlockFromId(Block->GetNextKey());
+        }
+    }
+}
+
 void __hot ScratchSprite::CreateScript(ScratchBlock & Block) {
-    ScratchScript Script {
-        .FirstBlockId = Block.GetNextKey(),
-        .CurrentBlockId = Block.GetNextKey(),
-        .ReturnStack = {},
-        .ParamBindings = {},
-        .Sprite = this,
-        .CurrentStatus = ScratchStatus::SCRATCH_END,
-        .ControlFlags = 0,
-    };
-    this->Scripts.emplace_back(std::move(Script));
-    this->Scripts.back().ReturnStack.reserve(32);
+    ScratchScript Script(Block.GetKey(), this);
+    this->Scripts.emplace_back(Script);
     Tachyon::ScriptAddReadyQueue(this->Scripts.back());
 }
 
+/**
+ * Only use when initializing the scheduler.
+ */
 void ScratchSprite::CreateScripts(void) {
     for(auto & Item : this->GreenFlags) {
         ScratchBlock & Block = *Item.second;
-        ScratchScript Script {
-            .FirstBlockId = Block.GetNextKey(),
-            .CurrentBlockId = Block.GetNextKey(),
-            .ReturnStack = {},
-            .ParamBindings = {},
-            .Sprite = this,
-            .CurrentStatus = ScratchStatus::SCRATCH_END,
-            .ControlFlags = 0,
-        };
+        ScratchScript Script(Block.GetKey(), this);
+        DebugInfo("Created script for constume '%s'\n", this->GetName().c_str());
         this->Scripts.emplace_back(std::move(Script));
-        this->Scripts.back().ReturnStack.reserve(32);
     }
 }
 
@@ -69,7 +73,7 @@ ScratchVariable * __hot ScratchSprite::GetVariableFromKey(std::string VarKey) {
         return &LocalItem->second;
     }
 
-    if (this->IsStage() == true) {
+    if (unlikely(this->IsStage() == true)) {
         return nullptr;
     }
 
@@ -167,10 +171,11 @@ int ScratchProject::ParseContents(void) {
     for (auto SpriteField: ProjectJson["targets"]) {
         ondemand::object SpriteObject;
         TachyonAssert(SpriteField.get_object().get(SpriteObject) == error_code::SUCCESS);
-
-        this->Sprites.push_back(
-            std::make_unique<ScratchSprite>(SpriteObject)
-        );
+        std::unique_ptr<ScratchSprite> Sprite = std::make_unique<ScratchSprite>(SpriteObject);
+        if (unlikely(Sprite->IsStage() == true)) {
+            Tachyon::SetStage(Sprite.get());
+        }
+        this->Sprites.push_back(std::move(Sprite));
     }
     /* we are done */
     free(ProjectDataPointer);

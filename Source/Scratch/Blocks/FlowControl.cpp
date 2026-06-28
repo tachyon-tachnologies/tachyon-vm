@@ -1,24 +1,26 @@
-#include "Common.hpp"
-#include "Scratch/Data.hpp"
+#include <Scratch/Data.hpp>
 #include <Scratch/Common.hpp>
 #include <Scratch/ControlFlow.hpp>
 #include <Scratch/BlockFields.hpp>
 #include <Scratch/Blocks.hpp>
 #include <Tachyon/Tachyon.hpp>
 #include <Tachyon/Debug.hpp>
+#include <Lib/NanBox.hpp>
+#include <Common.hpp>
 
+using namespace NanBox;
 using namespace Scratch;
 
 static ScratchStatus __hot ControlFlow_If(ScratchBlock & Block) {
-    ScratchInput Condition = Block.GetInput(0);
-    ScratchInput Substack = Block.GetInput(1);
+    const ScratchInput & Condition = Block.GetInput(0);
+    const ScratchInput & Substack = Block.GetInput(1);
     
-    if (unlikely(Condition.Type == ScratchInput::InputType::InvalidInput)) {
+    if (unlikely(Condition.IsType(InputType::InvalidInput))) {
         /* no condition is always false. advance to the next block */
         return ScratchStatus::SCRATCH_NEXT;
     }
 
-    TachyonAssert(Substack.Type == ScratchInput::InputType::SubstackInput || Condition.Type == ScratchInput::InputType::ConditionInput);
+    TachyonAssert(Substack.IsType(InputType::SubstackInput) || Condition.IsType(InputType::ConditionInput));
 
     ScratchSprite & Owner = Block.GetOwnerSprite();
     std::string ConditionBlockId = std::get<std::string>(Condition.Input);
@@ -29,36 +31,36 @@ static ScratchStatus __hot ControlFlow_If(ScratchBlock & Block) {
         return ScratchStatus::SCRATCH_NEXT;
     }
 
-    ScratchData Evaluation = Owner.GetBlockFromId(ConditionBlockId)->Evaluate();
+    BoxedValue Evaluation = Owner.GetBlockFromId(ConditionBlockId)->Evaluate();
     ScratchScript * CurrentScript = Tachyon::GetCurrentScript();
 
-    if (Evaluation.Boolean == true) {
-        CurrentScript->ReturnStack.push_back({
+    if (UnboxAsBoolean(Evaluation) == true) {
+        CurrentScript->StackPush({
             .ReturnId = Block.GetNextKey(),
             .RepeatId = {},
             .RepeatCondition = double(-1),
-            .InsideProcedure = bool(GetControlFlag(*CurrentScript, SCRIPT_INSIDE_PROCEDURE)) 
+            .InsideProcedure = bool(CurrentScript->GetControlFlag(SCRIPT_INSIDE_PROCEDURE)) 
         });
         CurrentScript->CurrentBlockId = SubstackFirstBlock;
-        SetControlFlag(*CurrentScript, SCRIPT_SHOULD_STAY);
+        CurrentScript->SetControlFlag(SCRIPT_SHOULD_STAY);
     }
     return ScratchStatus::SCRATCH_NEXT;
 }
 
 static ScratchStatus __hot ControlFlow_IfElse(ScratchBlock & Block) {
-    ScratchInput Condition = Block.GetInput(0);
-    ScratchInput SubstackIf = Block.GetInput(1);
-    ScratchInput SubstackElse = Block.GetInput(2);
+    const ScratchInput & Condition = Block.GetInput(0);
+    const ScratchInput & SubstackIf = Block.GetInput(1);
+    const ScratchInput & SubstackElse = Block.GetInput(2);
     
-    if (unlikely(Condition.Type == ScratchInput::InputType::InvalidInput)) {
+    if (unlikely(Condition.IsType(InputType::InvalidInput))) {
         /* no condition is always false. advance to the next block */
         return ScratchStatus::SCRATCH_NEXT;
     }
 
     TachyonAssert(
-        SubstackIf.Type == ScratchInput::InputType::SubstackInput ||
-        SubstackElse.Type == ScratchInput::InputType::SubstackInput ||
-        Condition.Type == ScratchInput::InputType::ConditionInput
+        SubstackIf.IsType(InputType::SubstackInput) ||
+        SubstackElse.IsType(InputType::SubstackInput) ||
+        Condition.IsType(InputType::ConditionInput)
     );
 
     ScratchSprite & Owner = Block.GetOwnerSprite();
@@ -66,28 +68,28 @@ static ScratchStatus __hot ControlFlow_IfElse(ScratchBlock & Block) {
     std::string SubstackIfFirstBlock = std::get<std::string>(SubstackIf.Input);
     std::string SubstackElseFirstBlock = std::get<std::string>(SubstackElse.Input);
 
-    ScratchData Evaluation = Owner.GetBlockFromId(ConditionBlockId)->Evaluate();
+    BoxedValue Evaluation = Owner.GetBlockFromId(ConditionBlockId)->Evaluate();
     ScratchScript * CurrentScript = Tachyon::GetCurrentScript();
 
     /* we're going into another stack whether we like it or not */
-    CurrentScript->ReturnStack.push_back({
+    CurrentScript->StackPush({
         .ReturnId = Block.GetNextKey(),
         .RepeatId = {},
         .RepeatCondition = double(-1),
-        .InsideProcedure = bool(GetControlFlag(*CurrentScript, SCRIPT_INSIDE_PROCEDURE)) 
+        .InsideProcedure = bool(CurrentScript->GetControlFlag(SCRIPT_INSIDE_PROCEDURE)) 
     });
 
-    CurrentScript->CurrentBlockId = Evaluation.Boolean ? SubstackIfFirstBlock : SubstackElseFirstBlock;
-    SetControlFlag(*CurrentScript, SCRIPT_SHOULD_STAY);
+    CurrentScript->CurrentBlockId = UnboxAsBoolean(Evaluation) ? SubstackIfFirstBlock : SubstackElseFirstBlock;
+    CurrentScript->SetControlFlag(SCRIPT_SHOULD_STAY);
     return ScratchStatus::SCRATCH_NEXT;
 }
 
 static ScratchStatus __hot ControlFlow_Stop(ScratchBlock & Block) {
     /* just retire the thread for now */
     ScratchMutation & Mutation = Block.GetMutation();
-    ScratchField StopOption = Block.GetField(0);
+    const ScratchField & StopOption = Block.GetField(0);
     
-    TachyonAssert(StopOption.Type == ScratchField::FieldType::StringField);
+    TachyonAssert(StopOption.IsType(FieldType::StringField));
 
     std::string Option(std::get<std::string>(StopOption.Field));
     if (Option == "this script") {
@@ -103,10 +105,10 @@ static ScratchStatus __hot ControlFlow_Stop(ScratchBlock & Block) {
 }
 
 static ScratchStatus __hot ControlFlow_Repeat(ScratchBlock & Block) {
-    ScratchInput Substack = Block.GetInput(0);
-    ScratchData TimesInput = Block.GetInputData(1);
+    const ScratchInput & Substack = Block.GetInput(0);
+    const BoxedValue TimesInput = Block.GetInputData(1);
 
-    TachyonAssert(Substack.Type == ScratchInput::InputType::SubstackInput);
+    TachyonAssert(Substack.IsType(InputType::SubstackInput));
     
     ScratchScript * CurrentScript = Tachyon::GetCurrentScript();
     std::string SubstackFirstBlock = std::get<std::string>(Substack.Input);
@@ -115,29 +117,29 @@ static ScratchStatus __hot ControlFlow_Repeat(ScratchBlock & Block) {
         return ScratchStatus::SCRATCH_NEXT;
     }
 
-    const double Times = TimesInput.AsDouble();
+    const double Times = UnboxAsDouble(TimesInput);
 
-    CurrentScript->ReturnStack.push_back({
+    CurrentScript->StackPush({
         .ReturnId = Block.GetNextKey(),
         .RepeatId = SubstackFirstBlock,
         .RepeatCondition = Times - 1,
-        .InsideProcedure = bool(GetControlFlag(*CurrentScript, SCRIPT_INSIDE_PROCEDURE)) 
+        .InsideProcedure = bool(CurrentScript->GetControlFlag(SCRIPT_INSIDE_PROCEDURE)) 
     });
     CurrentScript->CurrentBlockId = SubstackFirstBlock;
-    SetControlFlag(*CurrentScript, (SCRIPT_INVALIDATE_BLOCK | SCRIPT_SHOULD_STAY));
+    CurrentScript->SetControlFlag((SCRIPT_INVALIDATE_BLOCK | SCRIPT_SHOULD_STAY));
     return ScratchStatus::SCRATCH_NEXT;
 }
 
 static ScratchStatus __hot ControlFlow_While(ScratchBlock & Block) {
-    ScratchInput Condition = Block.GetInput(0);
-    ScratchInput Substack = Block.GetInput(1);
+    const ScratchInput & Condition = Block.GetInput(0);
+    const ScratchInput & Substack = Block.GetInput(1);
 
-    if (unlikely(Condition.Type == ScratchInput::InputType::InvalidInput)) {
+    if (unlikely(Condition.IsType(InputType::InvalidInput))) {
         /* nothing to execute if the condition is false */
         return ScratchStatus::SCRATCH_NEXT;
     }
 
-    TachyonAssert(Substack.Type == ScratchInput::InputType::SubstackInput && Condition.Type == ScratchInput::InputType::ConditionInput);
+    TachyonAssert(Substack.IsType(InputType::SubstackInput) && Condition.IsType(InputType::ConditionInput));
 
     ScratchSprite & Owner = Block.GetOwnerSprite();
     ScratchScript * CurrentScript = Tachyon::GetCurrentScript();
@@ -152,14 +154,14 @@ static ScratchStatus __hot ControlFlow_While(ScratchBlock & Block) {
     if (unlikely(SubstackFirstBlock.empty() == true)) {
         return ScratchStatus::SCRATCH_NEXT;
     }
-    CurrentScript->ReturnStack.push_back({
+    CurrentScript->StackPush({
         .ReturnId = Block.GetNextKey(),
         .RepeatId = SubstackFirstBlock,
         .RepeatCondition = ConditionBlock,
-        .InsideProcedure = bool(GetControlFlag(*CurrentScript, SCRIPT_INSIDE_PROCEDURE)) 
+        .InsideProcedure = bool(CurrentScript->GetControlFlag(SCRIPT_INSIDE_PROCEDURE)) 
     });
     CurrentScript->CurrentBlockId = SubstackFirstBlock;
-    SetControlFlag(*CurrentScript, (SCRIPT_INVALIDATE_BLOCK | SCRIPT_SHOULD_STAY));
+    CurrentScript->SetControlFlag((SCRIPT_INVALIDATE_BLOCK | SCRIPT_SHOULD_STAY));
     return ScratchStatus::SCRATCH_NEXT;
 }
 

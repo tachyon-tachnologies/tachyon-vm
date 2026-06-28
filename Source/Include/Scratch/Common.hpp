@@ -1,12 +1,5 @@
 #pragma once
 
-#include <Tachyon/Encoder.hpp>
-#include <Tachyon/Debug.hpp>
-#include <Scratch/Procedures.hpp>
-#include <Scratch/Motion.hpp>
-#include <Scratch/Blocks.hpp>
-#include <Scratch/Data.hpp>
-#include <Lib/SIMDJson.h>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -16,6 +9,15 @@
 #include <map>
 #include <zip.h>
 
+#include <Tachyon/Debug.hpp>
+#include <Scratch/Procedures.hpp>
+#include <Scratch/Motion.hpp>
+#include <Scratch/Blocks.hpp>
+#include <Scratch/Data.hpp>
+#include <Lib/SIMDJson.h>
+
+
+using namespace NanBox;
 using namespace simdjson;
 
 /* control flags. any bits that arent here are reserved */
@@ -34,68 +36,87 @@ namespace Scratch {
         std::string ReturnId;
         std::string RepeatId;
         std::variant<double, ScratchBlock *> RepeatCondition;
-        //enum class Type { Invalid, Repeat, RepeatUntil } RepeatType;
         bool InsideProcedure;
     };
 
-    using ProcedureBindings = std::unordered_map<std::string, ScratchData>;
+    using ProcedureBindings = std::unordered_map<std::string, BoxedValue>;
 
     /**
      * Contains the information of a script.
      */
-    struct ScratchScript {
-        std::string FirstBlockId;
-        std::string CurrentBlockId;
-        std::vector<Script_StackFrame> ReturnStack;
-        std::vector<ProcedureBindings> ParamBindings;
-        ScratchSprite * Sprite;
-        ScratchStatus CurrentStatus;
-        Tachyon_JITState JIT_State;
-        uint8_t ControlFlags;
+    class ScratchScript {
+        public:
+            std::string FirstBlockId;
+            std::string CurrentBlockId;
+            ScratchSprite * Sprite;
+            ScratchStatus CurrentStatus;
+            Tachyon_JITState JITState = {};
+            uint8_t ControlFlags;
+
+            inline void __hot SetControlFlag(const uint8_t Flag) {
+                this->ControlFlags |= Flag;
+            }
+
+            inline void __hot UnsetControlFlag(const uint8_t Flag) {
+                this->ControlFlags &= ~Flag;
+            }
+
+            constexpr bool __hot GetControlFlag(const uint8_t Flag) {
+                return (this->ControlFlags & Flag);
+            }
+
+            inline void __hot Return(void) {
+                TachyonAssertMsg(this->ReturnStack.empty() == false, "Stack underflow!\n");
+
+                const Script_StackFrame & CurrentStackFrame = this->ReturnStack.back();
+                /* restore procedure control flag */
+                this->ControlFlags &= ~(SCRIPT_INSIDE_PROCEDURE);
+                this->ControlFlags |= CurrentStackFrame.InsideProcedure;
+
+                this->CurrentBlockId = CurrentStackFrame.ReturnId;
+                this->ReturnStack.pop_back();
+            }
+
+            inline void __hot UnbindParameters(void) {
+                TachyonAssertMsg(this->ParamBindings.empty() == false, "Parameter bindings are empty??\n");
+                this->ParamBindings.pop_back();
+            }
+
+            inline ScratchStatus __hot RecursiveReturn(void) {
+                while(likely(this->CurrentBlockId.empty() == true)) {
+                    if (this->GetControlFlag(SCRIPT_INSIDE_PROCEDURE) == false) {
+                        return ScratchStatus::SCRATCH_END;
+                    }
+                    this->Return();
+                    this->UnbindParameters();
+                }
+                return ScratchStatus::SCRATCH_NEXT;
+            }
+
+            inline void StackPush(const Script_StackFrame Frame) {
+                this->ReturnStack.push_back(Frame);
+            }
+
+            inline std::vector<ProcedureBindings> & GetParameterBindings(void) {
+                return this->ParamBindings;
+            }
+
+            ScratchScript() = default;
+            ScratchScript(const std::string CurrentBlockKey, ScratchSprite * Owner) : FirstBlockId(CurrentBlockKey), CurrentBlockId(CurrentBlockKey), Sprite(Owner) {
+                this->CurrentStatus = ScratchStatus::SCRATCH_END;
+                this->ControlFlags = 0;
+                this->ParamBindings = {};
+                this->ReturnStack = {};
+                this->ParamBindings.reserve(4);
+                this->ReturnStack.reserve(32);
+            }
+        private:
+            std::vector<Script_StackFrame> ReturnStack;
+            std::vector<ProcedureBindings> ParamBindings;
     };
 
-    static constexpr bool __hot ShouldRepeatConditionally(Script_StackFrame & Frame) {
+    static constexpr bool __hot ShouldRepeatConditionally(const Script_StackFrame & Frame) {
         return std::holds_alternative<ScratchBlock *>(Frame.RepeatCondition);
-    }
-
-    static inline void __hot SetControlFlag(ScratchScript & Script, uint8_t Flag) {
-        Script.ControlFlags |= Flag;
-    }
-
-    static inline void __hot UnsetControlFlag(ScratchScript & Script, uint8_t Flag) {
-        Script.ControlFlags &= ~(Flag);
-    }
-
-    static constexpr bool __hot GetControlFlag(ScratchScript & Script, uint8_t Flag) {
-        return (Script.ControlFlags & Flag);
-    }
-
-    static inline void __hot ScriptReturn(ScratchScript & Script) {
-        TachyonAssert(Script.ReturnStack.empty() == false);
-
-        Script_StackFrame & CurrentStackFrame = Script.ReturnStack.back();
-        /* restore procedure control flag */
-        Script.ControlFlags &= ~(SCRIPT_INSIDE_PROCEDURE);
-        Script.ControlFlags |= CurrentStackFrame.InsideProcedure;
-
-        Script.CurrentBlockId = CurrentStackFrame.ReturnId;
-        Script.ReturnStack.pop_back();
-    }
-
-    static inline void __hot UnbindParameters(ScratchScript & Script) {
-        TachyonAssertMsg(Script.ParamBindings.empty() == false, "Parameter bindings are empty??");
-        Script.ParamBindings.pop_back();
-    }
-
-    static inline ScratchStatus __hot ScriptRecursiveReturn(ScratchScript & Script) {
-        while(likely(Script.CurrentBlockId.empty() == true)) {
-            if (GetControlFlag(Script, SCRIPT_INSIDE_PROCEDURE) == false) {
-                return ScratchStatus::SCRATCH_END;
-            }
-            ScriptReturn(Script);
-            UnbindParameters(Script);
-        }
-        return ScratchStatus::SCRATCH_NEXT;
     }
 
     /**
@@ -118,7 +139,6 @@ namespace Scratch {
                 return this->Filename;
             }
         protected:
-
             void GetAssetInformation(ondemand::object & ObjectData) {
                 ObjectData.reset();
                 /*
@@ -222,26 +242,34 @@ namespace Scratch {
             }
             /**
              * Gets a block from its ID.
-             * @param The block's ID.
+             * @param Id The block's ID.
              * @return A pointer to the block's data.
              */
             inline ScratchBlock * __hot GetBlockFromId(const std::string & Id) {
+                // it's a dud
                 if (unlikely(Id.empty() == true)) {
                     return nullptr;
                 }
                 uint64_t IdU64 = IdToU64(Id);
                 auto Item = this->Blocks.find(IdU64);
+                /* regular blocks */
                 if (unlikely(Item != this->Blocks.end())) {
                     return Item->second.get();
                 }
+                /* procedure definitions */
                 Item = this->ProcedureDefinitions.find(IdU64);
                 if (unlikely(Item != this->ProcedureDefinitions.end())) {
                     return Item->second.get();
                 }
+                /* green flag */
+                auto GreenFlagItem = this->GreenFlags.find(IdU64);
+                if (unlikely(GreenFlagItem != this->GreenFlags.end())) {
+                    return GreenFlagItem->second.get();
+                }
                 return nullptr;
             }
 
-            constexpr bool __hot IsVisible(void) {
+            constexpr bool IsVisible(void) {
                 return this->Visibile;
             }
 
@@ -382,20 +410,24 @@ namespace Scratch {
 
                     std::unique_ptr<ScratchBlock> Block = std::make_unique<ScratchBlock>(BlockKey, BlockObject, *this);
 
+                    /* sort */
                     if (Block->GetOpcode() == "event_whenflagclicked") {
-                        this->GreenFlags.insert({ BlockIdU64, std::move(Block) });
-                    } else if (Block->IsProcedureDef() == true) {
-                        this->ProcedureDefinitions.insert({ BlockIdU64, std::move(Block) });
+                        this->GreenFlags.insert({
+                            BlockIdU64,
+                            std::move(Block)
+                        });
                     } else if (Block->GetOpcode() == "event_whenbroadcastreceived") {
-                        this->BroadcastReceivers.insert({ BlockIdU64, std::move(Block) });
+                        this->BroadcastReceivers.insert({
+                            BlockIdU64,
+                            std::move(Block)
+                        });
                     } else {
-                        this->Blocks.insert({ BlockIdU64, std::move(Block) });
+                        Block->IsProcedureDef() ? this->ProcedureDefinitions.insert({ BlockIdU64, std::move(Block) }) : this->Blocks.insert({ BlockIdU64, std::move(Block) });
                     }
                 }
                 /* all blocks loaded. no missing dependencies to worry about */
-                if (this->ProcedureDefinitions.empty() == false) {
-                    this->ResolveProcedureDefinitions();
-                }
+                this->ResolveProcedureDefinitions();
+                this->CachePointers();
                 this->CreateScripts();
             }
 
@@ -407,10 +439,10 @@ namespace Scratch {
             ScratchVariable * __hot GetVariable(std::string VarName);
             ScratchList * __hot GetList(std::string ListName); 
 
-            std::map<uint32_t, std::unique_ptr<ScratchBlock>> GreenFlags;
-            std::unordered_map<uint32_t, std::unique_ptr<ScratchBlock>> BroadcastReceivers;
-            std::unordered_map<uint32_t, std::unique_ptr<ScratchBlock>> Blocks;
-            std::unordered_map<uint32_t, std::unique_ptr<ScratchBlock>> ProcedureDefinitions;
+            std::map<uint64_t, std::unique_ptr<ScratchBlock>> GreenFlags;
+            std::unordered_map<uint64_t, std::unique_ptr<ScratchBlock>> BroadcastReceivers;
+            std::unordered_map<uint64_t, std::unique_ptr<ScratchBlock>> Blocks;
+            std::unordered_map<uint64_t, std::unique_ptr<ScratchBlock>> ProcedureDefinitions;
 
             std::unordered_map<std::string, ScratchVariable> Variables;
             std::unordered_map<std::string, ScratchList> Lists;
@@ -425,8 +457,9 @@ namespace Scratch {
 
         private:
             void CreateScripts(void);
-            void DescendBlocks(ondemand::object BlocksObjects);
+            void CachePointers(void);
             void ResolveProcedureDefinitions(void);
+
             std::string Name;
             bool Visibile = true;
             bool StageSprite;
@@ -439,7 +472,7 @@ namespace Scratch {
         public:
             /**
              * ScratchProject constructor.
-             * @param The scratch project's SB3 file path.
+             * @param ZipPath The scratch project's SB3 file path.
              */
             explicit ScratchProject(std::string ZipPath) {
                 this->ProjectZip = zip_open(ZipPath.c_str(), 0, nullptr);
@@ -448,6 +481,11 @@ namespace Scratch {
                     return;
                 }
                 this->ProjectZip_Path = ZipPath;
+            }
+
+            ScratchProject() {
+                this->ProjectZip = nullptr;
+                this->ProjectZip_Path = {};
             }
 
             ~ScratchProject() {
@@ -470,7 +508,7 @@ namespace Scratch {
              * Checks whether the project has been loaded.
              * @return Returns true if it has been loaded, otherwise false.
              */
-            inline bool IsLoaded(void) {
+            constexpr bool IsLoaded(void) const {
                 return ProjectZip_Path.empty() == false;
             }
 
@@ -483,6 +521,7 @@ namespace Scratch {
         private:
             std::string ProjectZip_Path;
             zip_t * ProjectZip = nullptr;
+            
             /**
              * If true, the project has been modified. Otherwise, it is false.
              */

@@ -7,15 +7,15 @@
 using namespace Scratch;
 
 static ScratchStatus Motion_GoToXY(ScratchBlock & Block) {
-    ScratchData X_Data = Block.GetInputData(0);
-    ScratchData Y_Data = Block.GetInputData(1);
+    BoxedValue X_Data = Block.GetInputData(0);
+    BoxedValue Y_Data = Block.GetInputData(1);
 
-    double DestX = X_Data.Type == ScratchData::Type::Number ? X_Data.Number : 0;
-    double DestY = Y_Data.Type == ScratchData::Type::Number ? Y_Data.Number : 0;
+    double X = UnboxAsDouble(X_Data);
+    double Y = UnboxAsDouble(Y_Data);
 
     ScratchSprite & Owner = Block.GetOwnerSprite();
-    Owner.Position.first = (DestX > 255) ? 255 : DestX;
-    Owner.Position.second = (DestY > 255) ? 255 : DestY;
+    Owner.Position.first = (X > 255) ? 255 : X;
+    Owner.Position.second = (Y > 255) ? 255 : Y;
 
     return ScratchStatus::SCRATCH_NEXT;
 }

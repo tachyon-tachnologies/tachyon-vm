@@ -13,24 +13,24 @@
     do { \
         if (unlikely((Condition) == false)) { \
             DebugError("Tachyon assertion failed at (%s:%d): %s\n", __FILE__, __LINE__, #Condition); \
-            std::terminate(); \
+            std::abort(); \
         }  \
     } while(false)
 
-#define TachyonAssertMsg(Condition, Message) \
+#define TachyonAssertMsg(Condition, ...) \
     do { \
         if (unlikely((Condition) == false)) { \
             DebugError("Tachyon assertion failed at (%s:%d): %s\n", __FILE__, __LINE__, #Condition); \
-            DebugError("Assertion message: " Message "\n"); \
-            std::terminate(); \
+            DebugError("Assertion message: " __VA_ARGS__); \
+            std::abort(); \
         }  \
     } while(false)
 
 #define TachyonUnimplemented(...) \
-    do { DebugError("Tachyon Unimplemented: " __VA_ARGS__); std::terminate(); } while(false)
+    do { DebugError("Tachyon Unimplemented: " __VA_ARGS__); std::abort(); } while(false)
 
 #define TachyonAbort(...) \
-    do { DebugError(__VA_ARGS__); std::terminate(); } while(false)
+    do { DebugError(__VA_ARGS__); std::abort(); } while(false)
     
 
 namespace Debug {

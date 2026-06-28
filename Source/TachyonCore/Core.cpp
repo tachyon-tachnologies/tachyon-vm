@@ -1,52 +1,37 @@
 #include <SDL3/SDL.h>
 #include <Scratch/Common.hpp>
-#include <Scratch/ControlFlow.hpp>
-#include <Scratch/Data.hpp>
-#include <Scratch/Looks.hpp>
-#include <Scratch/Motion.hpp>
-#include <Scratch/Operator.hpp>
-#include <Scratch/Procedures.hpp>
-#include <Scratch/Reporters.hpp>
-#include <Scratch/Sensing.hpp>
-#include <Tachyon/Events.hpp>
+#include <Scratch/Scratch.hpp>
 #include <Tachyon/Tachyon.hpp>
 
 static Tachyon::Tachyon_VirtualMachine VM;
-static bool TachyonInitialized = false;
 
-int Tachyon::Init(void) {
-    if (TachyonInitialized == true) {
-        return 0;
-    }
+void Tachyon::Init(void) {
+    Scratch::RegisterAllOpcodes();
+    /* EXPERIMENTAL FEATURE */
+    VM.Configuration = (TACHYON_CFG_PBLOCK | TACHYON_CFG_DEBUG | TACHYON_CFG_COMPILER);
+}
+
+bool Tachyon::InitWindow(void) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
-        return -1;
+        return false;
     }
     VM.TachyonWindow = SDL_CreateWindow("Tachyon Virtual Machine", 480, 360, 0);
     if (VM.TachyonWindow == nullptr) {
         SDL_Quit();
-        return -1;
+        return false;
     }
     VM.TachyonRenderer = SDL_CreateRenderer(VM.TachyonWindow, nullptr);
     if (VM.TachyonRenderer == nullptr) {
         SDL_DestroyWindow(VM.TachyonWindow);
         SDL_Quit();
-        return -1;
+        return false;
     }
     SDL_SetRenderVSync(VM.TachyonRenderer, SDL_RENDERER_VSYNC_ADAPTIVE);
-    Scratch::Motion::RegisterAll();
-    Scratch::Operator::RegisterAll();
-    Scratch::Procedures::RegisterAll();
-    Scratch::Data::RegisterAll();
-    Scratch::Looks::RegisterAll();
-    Scratch::ControlFlow::RegisterAll();
-    Scratch::Sensing::RegisterAll();
-    Scratch::Reporters::RegisterAll();
-    Scratch::Events::RegisterAll();
-    Tachyon::Pseudo::RegisterAll();
-    /* EXPERIMENTAL FEATURE */
-    VM.Configuration = (TACHYON_CFG_PBLOCK | TACHYON_CFG_SHITTALK);
-    TachyonInitialized = true;
-    return 0;
+    return true;
+}
+
+bool Tachyon::DebuggerEnabled(void) {
+    return (VM.Configuration & TACHYON_CFG_DEBUG);
 }
 
 Tachyon::Tachyon_VirtualMachine * Tachyon::GetVM(void) {

@@ -1,12 +1,14 @@
 #pragma once
 
-#include "Tachyon/Debug.hpp"
+#include <Tachyon/Debug.hpp>
+#include <Tachyon/Assembler.hpp>
 #include <Scratch/BlockFields.hpp>
-#include <Scratch/Data.hpp>
 #include <Lib/SIMDJson.h>
+#include <Lib/NanBox.hpp>
 #include <Common.hpp>
 #include <string>
 
+using namespace NanBox;
 using namespace simdjson;
 
 namespace Scratch {
@@ -16,11 +18,11 @@ namespace Scratch {
      * Contains status codes returned by opcode handlers.
      */
     enum class ScratchStatus : uint8_t {
-        SCRATCH_END,
-        SCRATCH_NEXT,
-        SCRATCH_PAUSE,
-        SCRATCH_WAIT,
-        SCRATCH_WAIT_UNTIL
+        SCRATCH_END, // 0
+        SCRATCH_NEXT, // 1
+        SCRATCH_PAUSE, // 2
+        SCRATCH_WAIT, // 3
+        SCRATCH_WAIT_UNTIL // 4
     };
 
     class ScratchBlock;
@@ -31,7 +33,7 @@ namespace Scratch {
     struct ScratchMutation {
         std::vector<std::string> ParametersKeys;
         std::vector<std::string> ParametersNames;
-        std::vector<ScratchData> ParameterDefaults;
+        std::vector<BoxedValue> ParameterDefaults;
         std::string ProcCode;
         bool HasNext;
         bool UseWarp;
@@ -43,7 +45,8 @@ namespace Scratch {
      */
 
     using OpcodeHandler = ScratchStatus (*)(ScratchBlock &);
-    using EvaluationHandler = ScratchData (*)(ScratchBlock &);
+    using EvaluationHandler = BoxedValue (*)(ScratchBlock &);
+    using CompileHandler = ScratchStatus (*)(TachyonAssembler &, ScratchBlock &);
 
     /**
      * Contains scratch block information.
@@ -51,9 +54,15 @@ namespace Scratch {
     class ScratchBlock {
         public:
             /**
+             * Pointer to the next block
+             */
+            ScratchBlock * NextBlock_Pointer = nullptr;
+
+            /**
              * Scratch block constructor.
-             * @param The block's key ID.
-             * @param The block's JSON data.
+             * @param Key The block's key ID.
+             * @param BlockData The block's JSON data.
+             * @param Owner The owner of the block
              */
             ScratchBlock (std::string Key, ondemand::object BlockData, ScratchSprite & Owner) : Sprite(Owner), BlockKey(Key) {
                 /*
@@ -122,13 +131,13 @@ namespace Scratch {
                     TachyonAssert(InputField.value().get_array().get(InputArray) == error_code::SUCCESS);
 
                     this->Inputs.emplace_back(
-                        this->ParseInput(InputKey, InputArray)
+                        ScratchInput(*this, InputKey, InputArray)
                     );
                 }
                 if (this->Inputs.empty() == false) {
                     /* sort inputs */
                     std::sort(this->Inputs.begin(), this->Inputs.end(), [](const ScratchInput & A, const ScratchInput & B) {
-                        return A.Type < B.Type;
+                        return A.GetType() < B.GetType();
                     });
                 }
                 /*
@@ -145,8 +154,9 @@ namespace Scratch {
                     ondemand::array FieldArray;
                     TachyonAssert(FieldField.value().get_array().get(FieldArray) == error_code::SUCCESS);
 
+                    // WARNING: watch out for lifetime
                     this->Fields.emplace_back(
-                        this->ParseField(FieldKey, FieldArray)
+                        ScratchField(*this, FieldKey, FieldArray)
                     );
                 }
                 /* assign function based on opcode */
@@ -223,6 +233,7 @@ namespace Scratch {
             
             /**
              * Executes the current block.
+             * Should only be used for the interpreter.
              */
             inline ScratchStatus __hot Execute(void) {
                 if (likely(this->Handler)) {
@@ -234,8 +245,9 @@ namespace Scratch {
 
             /**
              * Executes and returns the block's result.
+             * Should only be used for the interpreter.
              */
-            inline ScratchData __hot Evaluate(void) {
+            inline BoxedValue __hot Evaluate(void) {
                 if (likely(this->ReporterHandler)) {
                     return this->ReporterHandler(*this);
                 }
@@ -244,8 +256,19 @@ namespace Scratch {
             }
 
             /**
+             * Compiles the current block.
+             */
+            inline ScratchStatus __hot CompileBlock(TachyonAssembler & Asm) {
+                if (likely(this->Compile)) {
+                    return this->Compile(Asm, *this);
+                }
+                return ScratchStatus::SCRATCH_END;
+            }
+
+            /**
              * Gets the block's mutation (if it exists).
              */
+            [[nodiscard]]
             constexpr ScratchMutation & __hot GetMutation(void) {
                 return this->Mutation.value();
             }
@@ -254,11 +277,11 @@ namespace Scratch {
              * Get's the block's sprite.
              * @return The block's sprite.
              */
-            ScratchSprite & __hot GetOwnerSprite(void);
-
-            ScratchData __hot GetInputData(size_t InputNum);
-            ScratchInput __hot GetInput(size_t InputNum);
-            ScratchField __hot GetField(size_t FieldNum);
+            ScratchSprite & __hot GetOwnerSprite(void) const;
+            
+            BoxedValue __hot GetInputData(size_t InputNum);
+            ScratchInput & __hot GetInput(size_t InputNum);
+            ScratchField & __hot GetField(size_t FieldNum);
         private:
             std::optional<ScratchMutation> Mutation;
 
@@ -268,8 +291,7 @@ namespace Scratch {
             void LinkHandlers(void);
 
             ScratchMutation ParseMutation(ondemand::object MutationObject);
-            ScratchInput ParseInput(std::string & Key, ondemand::array InputObject);
-            ScratchField ParseField(std::string & Key, ondemand::array FieldObject);
+            ScratchInput ParseInput(std::string & Key, ondemand::array & InputObject);
 
             std::string Opcode;
             std::string NextBlock_Key;
@@ -281,14 +303,19 @@ namespace Scratch {
             std::reference_wrapper<ScratchSprite> Sprite;
 
             /**
-             * Should only be used for non-reporter blocks.
+             * Should only be used for non-reporter blocks in interpreter mode.
              */
             OpcodeHandler Handler = nullptr;
 
             /**
-             * Should only be used for reporter blocks.
+             * Should only be used for reporter blocks in interpreter mode.
              */
             EvaluationHandler ReporterHandler = nullptr;
+
+            /**
+             * Should only be used in compiler mode.
+             */
+            CompileHandler Compile = nullptr;
 
             bool Shadow;
             bool TopLevel;

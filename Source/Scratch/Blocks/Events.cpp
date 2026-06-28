@@ -1,22 +1,27 @@
-#include <Scratch/BlockFields.hpp>
-#include <Scratch/Common.hpp>
 #include <Tachyon/Tachyon.hpp>
+#include <Tachyon/Compiler.hpp>
 #include <Tachyon/Events.hpp>
+#include <Scratch/BlockFields.hpp>
 #include <Scratch/Blocks.hpp>
+#include <Scratch/Common.hpp>
 #include <Tachyon/Debug.hpp>
 
 using namespace Scratch;
 
-static ScratchStatus EventBroadcast(ScratchBlock & Block) {
+/**
+ * Interpreter implementations ----
+ */
+
+static ScratchStatus EventBroadcastAndWait(ScratchBlock & Block) {
     ScratchSprite & Owner = Block.GetOwnerSprite();
     /* TODO: do the same thing as EventBroadcastAsync but instead of creating a seperate script, push it in the call stack */
     return ScratchStatus::SCRATCH_NEXT;
 }
 
-static ScratchStatus EventBroadcastAsync(ScratchBlock & Block) {
+static ScratchStatus EventBroadcast(ScratchBlock & Block) {
     ScratchProject & Project = *Tachyon::GetLoadedProject();
-    ScratchInput Input = Block.GetInput(0);
-    if (Input.Type != ScratchInput::InputType::BroadcastInput) {
+    const ScratchInput & Input = Block.GetInput(0);
+    if (Input.IsType(InputType::BroadcastInput) == false) {
         return ScratchStatus::SCRATCH_END;
     }
     const std::string BroadcastInputKey = std::get<std::string>(Input.Input);
@@ -24,8 +29,8 @@ static ScratchStatus EventBroadcastAsync(ScratchBlock & Block) {
     for(auto & Sprite : Project.Sprites) {
         for(const auto & Broadcast : Sprite->BroadcastReceivers) {
             ScratchBlock BroadcastBlock = *Broadcast.second;
-            ScratchField Field = BroadcastBlock.GetField(0);
-            if (Field.Type != ScratchField::FieldType::BroadcastOption) {
+            const ScratchField & Field = BroadcastBlock.GetField(0);
+            if (Field.IsType(FieldType::BroadcastOption) == false) {
                 continue;
             }
             const std::string BroadcastFieldKey = std::get<std::string>(Field.Field);
@@ -47,7 +52,23 @@ static ScratchStatus EventBroadcastAsync(ScratchBlock & Block) {
     return ScratchStatus::SCRATCH_NEXT;
 }
 
+/**
+ * Compiler implementations ----
+ */
+
+static ScratchStatus EventFlagClicked(TachyonAssembler & Asm, ScratchBlock & __unused Block) {
+    ScratchScript * Script = Tachyon::GetCurrentScript();
+    if (unlikely(Script == nullptr)) {
+        return ScratchStatus::SCRATCH_END;
+    }
+    Asm.EmitMainPrologue(Script->JITState);
+    return ScratchStatus::SCRATCH_NEXT;
+}
+ 
 void Events::RegisterAll(void) {
-    Tachyon::RegisterOpHandler("event_broadcast", EventBroadcastAsync);
-    Tachyon::RegisterOpHandler("event_broadcastandwait", EventBroadcast);
+    /* interpreter */
+    Tachyon::RegisterOpHandler("event_broadcast", EventBroadcast);
+    Tachyon::RegisterOpHandler("event_broadcastandwait", EventBroadcastAndWait);
+    /* compiler */
+    Tachyon::RegisterCompileHandler("event_whenflagclicked", EventFlagClicked);
 }

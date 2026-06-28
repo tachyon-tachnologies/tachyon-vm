@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Scratch/Procedures.hpp>
-#include <Tachyon/Encoder.hpp>
 #include <Scratch/Common.hpp>
 #include <Scratch/Blocks.hpp>
 #include <Common.hpp>
@@ -11,28 +10,40 @@
 #include <SDL3/SDL_render.h>
 
 /**
- * Configuration option: Script watchdog.
+ * Configuration option: Script watchdog
  * Enables a watchdog for all scripts.
  */
-#define TACHYON_CFG_WATCHDOG  (1 << 0)
+#define TACHYON_CFG_WATCHDOG    (1 << 0)
 
 /**
- * Configuration option: Pseudo-block support.
+ * Configuration option: Pseudo-block support
  * When enabled, procedures with certain names and structure can be called to make the VM do heavy tasks instead of the project.
  */
-#define TACHYON_CFG_PBLOCK    (1 << 1)
+#define TACHYON_CFG_PBLOCK      (1 << 1)
 
 /**
- * Configuration option: Shit talk.
+ * Configuration option: Shit talk
  * Talks shit about WarpDrive (build a x86 JIT compiler before talking shit, loser), TurboWarp (we don't mean it for yall), and any other Scratch mod that is slower than us.
  */
-#define TACHYON_CFG_SHITTALK  (1 << 2)
+#define TACHYON_CFG_SHITTALK    (1 << 2)
 
 /**
  * Configuration option: Blitz
- * Makes the VM execute code extremely fast.
+ * Makes the VM execute code extremely fast. (no FPS cap)
  */
-#define TACHYON_CFG_BLITZ     (1 << 3)
+#define TACHYON_CFG_BLITZ       (1 << 3)
+
+/**
+ * Configuration option: Debug mode
+ * Enables debugging on the Tachyon VM
+ */
+#define TACHYON_CFG_DEBUG       (1 << 4)
+
+/**
+ * Configuration option: Compiler
+ * Enables the Tachyon JIT compiler.
+ */
+#define TACHYON_CFG_COMPILER    (1 << 5)
 
 namespace Tachyon {
 
@@ -48,13 +59,18 @@ namespace Tachyon {
     };
 
     /**
+     * Initializes Tachyon and registers all opcode handlers.
+     */
+    void Init(void);
+
+    /**
      * Initializes SDL3.
      */
-    int Init(void);
+    bool InitWindow(void);
 
     /**
      * Initializes the scheduler.
-     * @param The scratch project to execute.
+     * @param Project The scratch project to execute.
      */
     void InitializeScheduler(Scratch::ScratchProject & Project);
 
@@ -72,9 +88,9 @@ namespace Tachyon {
 
     /**
      * Adds a script to the ready queue of the scheduler.
-     * @param The script
+     * @param Script The script
      */
-    void ScriptAddReadyQueue(Scratch::ScratchScript Script);
+    void ScriptAddReadyQueue(Scratch::ScratchScript & Script);
 
     /**
      * Gets the loaded project.
@@ -89,11 +105,21 @@ namespace Tachyon {
     Scratch::ScratchScript * GetCurrentScript(void);
 
     /**
-     * Gets the stage sprite.
-     * IMPORTANT: Must be called AFTER Tachyon::InitializeScheduler()
-     * @return The stage sprite.
+     * @returns The stage sprite
      */
     Scratch::ScratchSprite * GetStage(void);
+    
+    /**
+     * Sets the stage sprite used in variable/list lookups
+     * @param Sprite The stage sprite
+     */
+    void SetStage(Scratch::ScratchSprite * Sprite);
+
+    /**
+     * Checks if the VM has the debugger enabled.
+     * @return True if the debugger is enabled, and false if otherwise.
+     */
+    bool DebuggerEnabled(void);
 
     /**
      * Starts the main VM loop.
@@ -113,22 +139,29 @@ namespace Tachyon {
     void __hot Render(void);
 
     /**
-     * Registers an opcode handler.
-     * @param Opcode string.
-     * @param The function that handles the specific opcode.
+     * Registers a block opcode handler (for the regular interpreter only).
+     * @param Opcode The block's opcode
+     * @param Handler The handler function.
      */
     void RegisterOpHandler(std::string_view Opcode, Scratch::OpcodeHandler Handler);
 
     /**
-     * Registers an evaluation (reporter) handler.
-     * @param Opcode string.
-     * @param The function that handles the specific opcode.
+     * Registers a block evaluation handler (for the regular interpreter only).
+     * @param Opcode The block's opcode
+     * @param Handler The handler function
      */
     void RegisterEvaluationHandler(std::string_view Opcode, Scratch::EvaluationHandler Handler);
 
     /**
+     * Registers an opcode compiler.
+     * @param Opcode The opcode to handle compilation for
+     * @param Handler The function that compiles the opcode
+     */
+    void RegisterCompileHandler(std::string_view Opcode, Scratch::CompileHandler Handler);
+
+    /**
      * Renders a sprite only if it's visible.
-     * @param The sprite to render
+     * @param Sprite The sprite to render
      */
     void RenderSprite(Scratch::ScratchSprite & Sprite);
 

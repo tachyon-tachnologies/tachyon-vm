@@ -3,8 +3,10 @@
 #include <Scratch/Blocks.hpp>
 #include <Tachyon/Tachyon.hpp>
 #include <Tachyon/Debug.hpp>
+#include <Lib/NanBox.hpp>
 #include <cstdint>
 
+using namespace NanBox;
 using namespace Tachyon;
 using namespace Scratch;
 
@@ -18,20 +20,22 @@ bool Pseudo::IsPseudo(std::string ProcCode) {
 }
 
 static ScratchStatus __hot Tachyon_LoadU8Buffer(ScratchBlock & Block) {
-    ScratchData Name = Block.GetInputData(0);
+    BoxedValue Name = Block.GetInputData(0);
     ScratchSprite & Owner = Block.GetOwnerSprite();
-    ScratchList * List = Owner.GetList(Name.AsString());
+
+    std::string ListName = UnboxAsString(Name);
+    ScratchList * List = Owner.GetList(ListName);
     if (List != nullptr) {
         List->SwitchToBuffer();
         return ScratchStatus::SCRATCH_NEXT;
     }
-    DebugWarn("Failed to load buffer: Invalid name: \"%s\"\n", Name.AsString().c_str());
+    DebugWarn("Failed to load buffer: Invalid name: \"%s\"\n", ListName.c_str());
     return ScratchStatus::SCRATCH_NEXT;
 }
 
 static ScratchStatus __hot Tachyon_Xor(ScratchBlock & Block) {
-    ScratchData InputA = Block.GetInputData(0);
-    ScratchData InputB = Block.GetInputData(1);
+    BoxedValue InputA = Block.GetInputData(0);
+    BoxedValue InputB = Block.GetInputData(1);
 
     ScratchSprite & Owner = Block.GetOwnerSprite();
 
@@ -42,16 +46,16 @@ static ScratchStatus __hot Tachyon_Xor(ScratchBlock & Block) {
         return ScratchStatus::SCRATCH_END;
     }
 
-    const uint32_t A = uint32_t(InputA.AsDouble());
-    const uint32_t B = uint32_t(InputB.AsDouble());
+    const uint32_t A = static_cast<uint32_t>(UnboxAsDouble(InputA));
+    const uint32_t B = static_cast<uint32_t>(UnboxAsDouble(InputB));
 
-    Result->SetData(std::move(double(A ^ B)));
+    Result->SetData(std::move(Box(static_cast<double>(A ^ B))));
 
     return ScratchStatus::SCRATCH_NEXT;
 }
 
 static ScratchStatus __hot Tachyon_Log(ScratchBlock & Block) {
-    ScratchData String = Block.GetInputData(0);
+    BoxedValue String = Block.GetInputData(0);
     std::cout << String << std::endl;
     return ScratchStatus::SCRATCH_NEXT;
 }

@@ -5,14 +5,16 @@
 #include <Scratch/BlockFields.hpp>
 #include <Scratch/Blocks.hpp>
 #include <Tachyon/Tachyon.hpp>
+#include <Lib/NanBox.hpp>
 #include <string>
 
+using namespace NanBox;
 using namespace Scratch;
 
-static inline ScratchData __hot GetBindedParameter(std::string ParamName, ScratchScript & CurrentScript) {
-    TachyonAssert(CurrentScript.ParamBindings.empty() == false);
+static inline BoxedValue __hot GetBindedParameter(std::string ParamName, ScratchScript & CurrentScript) {
+    TachyonAssert(CurrentScript.GetParameterBindings().empty() == false);
 
-    ProcedureBindings Map = CurrentScript.ParamBindings.back();
+    ProcedureBindings Map = CurrentScript.GetParameterBindings().back();
 
     auto Item = Map.find(ParamName);
 
@@ -23,8 +25,8 @@ static inline ScratchData __hot GetBindedParameter(std::string ParamName, Scratc
     return Item->second;
 }
 
-static ScratchData __hot Reporter_Boolean(ScratchBlock & Block) {
-    const ScratchField Field = Block.GetField(0);
+static BoxedValue __hot Reporter_Boolean(ScratchBlock & Block) {
+    const ScratchField & Field = Block.GetField(0);
     std::string ParamName = std::get<std::string>(Field.Field);
     if (ParamName == "Is Tachyon?") {
         return true;
@@ -32,8 +34,8 @@ static ScratchData __hot Reporter_Boolean(ScratchBlock & Block) {
     return GetBindedParameter(ParamName, *Tachyon::GetCurrentScript());
 }
 
-static __hot ScratchData Reporter_StringNum(ScratchBlock & Block) {
-    const ScratchField Field = Block.GetField(0);
+static __hot BoxedValue Reporter_StringNum(ScratchBlock & Block) {
+    const ScratchField & Field = Block.GetField(0);
     std::string ParamName = std::get<std::string>(Field.Field);
     return GetBindedParameter(ParamName, *Tachyon::GetCurrentScript());
 }

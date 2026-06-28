@@ -4,3 +4,5 @@ out
 # Visual Studio / Visual Studio Code
 .vs
 .vscode
+# AI coding agents
+AGENTS.md

@@ -3,11 +3,13 @@
 #include <Scratch/BlockFields.hpp>
 #include <Scratch/Blocks.hpp>
 #include <Scratch/Looks.hpp>
+#include <Lib/NanBox.hpp>
 
+using namespace NanBox;
 using namespace Scratch;
 
 static ScratchStatus Looks_Say(ScratchBlock & Block) {
-    ScratchData Data = Block.GetInputData(0);
+    BoxedValue Data = Block.GetInputData(0);
     std::cout << "looks_say: " << Data << std::endl;
     return ScratchStatus::SCRATCH_NEXT;
 }

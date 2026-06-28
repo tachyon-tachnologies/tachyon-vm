@@ -5,8 +5,5 @@
 using namespace Scratch;
 
 void __hot Tachyon::RenderSprite(ScratchSprite & Sprite) {
-    if (Sprite.IsVisible() == false) {
-        return;
-    }
-    
+    (void)Sprite;
 }
