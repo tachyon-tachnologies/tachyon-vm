@@ -17,6 +17,12 @@ Tachyon's VM requires SDL3, and libzip to be installed in order to compile succe
 1. Clone the repository along with it's submodules.
 2. Run ``.\vcpkg\bootstrap-vcpkg.bat`` for Windows systems, or ``./vcpkg/bootstrap-vcpkg.sh`` for UNIX-esque systems to install the package manager required to install the project's libraries
 3. Then, run ``vcpkg integrate install`` to be able to install libraries system-wide.
-4. Now, you can install the two dependencies: ``vcpkg install sdl3:x64-windows libzip:x64-windows`` for Windows systems, or ``vcpkg install sdl3:x64-linux libzip:x64-linux`` for UNIX-esque systems.
+4. Now, you can install the three dependencies: ``vcpkg install sdl3:x64-windows libzip:x64-windows simdjson:x64-windows`` for Windows systems, or ``vcpkg install sdl3:x64-linux libzip:x64-linux simdjson`` for UNIX-esque systems.
 
-Now that you've got that done, you may now run ``cmake -B build`` to build Tachyon.
+## Building the VM
+Now that you've got that done, you may now follow these last two easy steps:
+
+1. Run ``cmake -B build`` to generate build files for Tachyon.
+2. And finally, run ``ninja -C build`` for Windows systems, or ``make -C build`` for UNIX-esque systems to build Tachyon.
+
+Congrats, you just built Tachyon.
