@@ -1,11 +1,11 @@
 #pragma once
 
-#include <type_traits>
 #include <string>
 #include <cstdint>
 #include <variant>
+
 #include <Scratch/Data.hpp>
-#include <Lib/SIMDJson.h>
+#include <simdjson.h>
 #include <Lib/NanBox.hpp>
 
 using namespace NanBox;
@@ -28,7 +28,7 @@ namespace Scratch {
                 return (this->Type == Type);
             }
 
-            ScratchField(ScratchBlock & Owner, std::string & Key, simdjson::ondemand::array & FieldObject);
+            ScratchField(ScratchBlock & Owner, const std::string & Key, simdjson::ondemand::array & FieldObject);
 
             std::variant<ScratchList *, ScratchVariable *, std::string> Field;
         private:
@@ -96,7 +96,7 @@ namespace Scratch {
                 return this->ReporterBlock;
             }
 
-            ScratchInput(ScratchBlock & Owner, std::string & Key, simdjson::ondemand::array & InputObject);
+            ScratchInput(ScratchBlock & Owner, const std::string & Key, simdjson::ondemand::array & InputObject);
 
             std::variant<Input_Value, std::string> Input;
         private:

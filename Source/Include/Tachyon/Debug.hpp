@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common.hpp>
-#include <exception>
+#include <cstdlib>
 
 /* some parts taken from lk and ppsspp (thanks :>) */
 
@@ -34,5 +34,5 @@
     
 
 namespace Debug {
-    void Report(const char * Message, ...);
+    void __hot Report(const char * Message, ...);
 };

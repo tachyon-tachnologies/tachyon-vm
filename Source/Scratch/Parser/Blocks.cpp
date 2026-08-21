@@ -6,7 +6,7 @@
 #include <Scratch/BlockFields.hpp>
 #include <Scratch/Blocks.hpp>
 #include <Lib/NanBox.hpp>
-#include <Lib/SIMDJson.h>
+#include <simdjson.h>
 #include <Common.hpp>
 
 using namespace simdjson;
@@ -238,7 +238,7 @@ ScratchMutation ScratchBlock::ParseMutation(ondemand::object MutationObject) {
     return BlockMutation;
 }
 
-static inline InputType GetInputType(std::string & Key) {
+static inline InputType GetInputType(std::string_view Key) {
     /* these all belong to the same type (ScratchInput::InputType::ValueInput) */
     static const std::unordered_set<std::string> ValueKeys = {
         "VALUE", "MESSAGE", "STRING1", "STRING2",
@@ -252,7 +252,7 @@ static inline InputType GetInputType(std::string & Key) {
         "OBJECT", "CHANGE", "SECS", "KEY_OPTION",
         "TOUCHINGOBJECTMENU", "TOWARDS", "DISTANCETOMENU",
     };
-    if (ValueKeys.count(Key) > 0) return InputType::ValueInput;
+    if (ValueKeys.count(Key.data()) > 0) return InputType::ValueInput;
     if (Key == "CONDITION") return InputType::ConditionInput;
     if (Key == "SUBSTACK" || Key == "SUBSTACK2") return InputType::SubstackInput;
     if (Key == "BROADCAST_INPUT") return InputType::BroadcastInput;
@@ -261,16 +261,16 @@ static inline InputType GetInputType(std::string & Key) {
     return InputType::InvalidInput;
 }
 
-static inline FieldType GetFieldType(std::string & Key) {
+static inline FieldType GetFieldType(std::string_view Key) {
     /* these all belong to the same type (ScratchField::FieldType::StringField) */
     static const std::unordered_set<std::string> ValueKeys = {
         "OPERATOR", "VALUE", "STOP_OPTION", "CURRENTMENU",
         "COSTUME", "TO", "SOUND_MENU", "BACKDROP",
         "CLONE_OPTION", "EFFECT", "PROPERTY", "OBJECT",
         "FRONT_BACK", "KEY_OPTION", "TOUCHINGOBJECTMENU", "TOWARDS",
-        "NUMBER_NAME", "DISTANCETOMENU", 
+        "NUMBER_NAME", "DISTANCETOMENU",
     };
-    if (ValueKeys.count(Key) > 0) return FieldType::StringField;
+    if (ValueKeys.count(Key.data()) > 0) return FieldType::StringField;
     if (Key == "LIST") return FieldType::ListField;
     if (Key == "VARIABLE") return FieldType::VariableField;
     if (Key == "BROADCAST_OPTION") return FieldType::BroadcastOption;
@@ -380,11 +380,6 @@ void ScratchInput::ParseValueInput(ScratchSprite & Owner, ondemand::array & Inpu
     }
 }
 
-/**
- * Control input = substack / condition
- * @param Input
- * @param JSON data of the input
- */
 void ScratchInput::ParseControlInput(ondemand::array & InputObject) {
     InputObject.reset();
 
@@ -423,7 +418,7 @@ void ScratchInput::ParseProcedureDefinition(ondemand::array & InputObject) {
     InputObject.reset();
 }
 
-ScratchInput::ScratchInput(ScratchBlock & Owner, std::string & Key, ondemand::array & InputObject) {
+ScratchInput::ScratchInput(ScratchBlock & Owner, const std::string & Key, ondemand::array & InputObject) {
     this->ShadowType = ParseShadowType(InputObject);
     this->Type = GetInputType(Key);
 
@@ -449,7 +444,7 @@ ScratchInput::ScratchInput(ScratchBlock & Owner, std::string & Key, ondemand::ar
         }
         default: {
             if (Owner.IsProcedurePrototype() == false && Owner.IsProcedureCall() == false) {
-                TachyonUnimplemented("Unknown input. Input: %u, Key: %s\n", this->Type, Key.c_str());
+                TachyonUnimplemented("Unknown input. Input: %u, Key: %s\n", this->Type, Key.data());
             }
             this->Type = InputType::ValueInput;
             this->ParseValueInput(OwnerSprite, InputObject);
@@ -502,10 +497,10 @@ void ScratchField::ParseDataField(ondemand::array & FieldObject, ScratchBlock & 
         this->Field = Variable;
         return;
     }
-    TachyonAbort("Invalid data key: \"%s\"\n", VariableKey.c_str());
+    TachyonAbort("Invalid data key: \"%s\"\n", VariableKey.data());
 }
 
-ScratchField::ScratchField(ScratchBlock & Owner, std::string & Key, ondemand::array & FieldObject) {
+ScratchField::ScratchField(ScratchBlock & Owner, const std::string & Key, ondemand::array & FieldObject) {
     this->Type = GetFieldType(Key);
     switch(this->Type) {
         case FieldType::VariableField:
@@ -522,7 +517,7 @@ ScratchField::ScratchField(ScratchBlock & Owner, std::string & Key, ondemand::ar
             break;
         }
         default: {
-            TachyonUnimplemented("Unknown field. Field: %u, Key: %s\n", this->Type, Key.c_str());
+            TachyonUnimplemented("Unknown field. Field: %u, Key: %s\n", this->Type, Key.data());
         }
     }
 }

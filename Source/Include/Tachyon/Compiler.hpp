@@ -1,15 +1,17 @@
 #pragma once
 
-#include <Tachyon/Debug.hpp>
-#include <Scratch/Common.hpp>
-#include <Tachyon/Assembler.hpp>
-#include <Common.hpp>
 #include <string>
 
+#include <Tachyon/Debug.hpp>
+#include <Scratch/Common.hpp>
+#include <Scratch/Scripts.hpp>
+#include <Tachyon/Assembler.hpp>
+#include <Lib/NanBox.hpp>
+#include <Common.hpp>
+
 #define CompilerAssert(Condition, ...) \
-    TachyonAssertMsg(Condition, "Cannot compile script: " __VA_ARGS__);
+    TachyonAssertMsg(Condition, "Cannot compile script: " __VA_ARGS__)
 
 namespace Tachyon {
-    void __hot Compile(Scratch::ScratchScript & Script, std::string BlockId);
-    void __hot CompileProcedure(Scratch::ScratchProcedure & Procedure, Scratch::ScratchScript & Script, std::string BlockId);
+    OutputCodeInfo __hot Compile(Scratch::ScratchScript & Script, std::string BlockId);
 };

@@ -46,7 +46,6 @@
 #define TACHYON_CFG_COMPILER    (1 << 5)
 
 namespace Tachyon {
-
     using TachyonConfig = uint16_t;
 
     struct Tachyon_VirtualMachine {
@@ -69,12 +68,6 @@ namespace Tachyon {
     bool InitWindow(void);
 
     /**
-     * Initializes the scheduler.
-     * @param Project The scratch project to execute.
-     */
-    void InitializeScheduler(Scratch::ScratchProject & Project);
-
-    /**
      * Gets the VM information.
      * @return VM information.
      */
@@ -87,22 +80,10 @@ namespace Tachyon {
     TachyonConfig GetConfigVM(void);
 
     /**
-     * Adds a script to the ready queue of the scheduler.
-     * @param Script The script
-     */
-    void ScriptAddReadyQueue(Scratch::ScratchScript & Script);
-
-    /**
      * Gets the loaded project.
      * @return The loaded project.
      */
     Scratch::ScratchProject * GetLoadedProject(void);
-
-    /**
-     * Gets the currently running script.
-     * @return The script that is currently running.
-     */
-    Scratch::ScratchScript * GetCurrentScript(void);
 
     /**
      * @returns The stage sprite
@@ -151,13 +132,6 @@ namespace Tachyon {
      * @param Handler The handler function
      */
     void RegisterEvaluationHandler(std::string_view Opcode, Scratch::EvaluationHandler Handler);
-
-    /**
-     * Registers an opcode compiler.
-     * @param Opcode The opcode to handle compilation for
-     * @param Handler The function that compiles the opcode
-     */
-    void RegisterCompileHandler(std::string_view Opcode, Scratch::CompileHandler Handler);
 
     /**
      * Renders a sprite only if it's visible.

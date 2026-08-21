@@ -10,11 +10,7 @@
 #include <string_view>
 #include <string>
 #include <variant>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wredundant-decls"
-#include <Lib/SIMDJson.h>
-#pragma GCC diagnostic pop
+#include <simdjson.h>
 
 using namespace NanBox;
 using namespace simdjson;
@@ -127,7 +123,7 @@ SkipChecks:
                 /* not too reliable to detect strings. could be hex, octal, binary, or a number. */
                 std::string String;
                 TachyonAssert(VariableData.get_string().get(String) == error_code::SUCCESS);
-                /* TODO: If error, it returns the string without modifications. */
+                /* If error, it returns the string without modifications. */
                 return StringToNum(String);
             }
             case ondemand::json_type::boolean: {
@@ -158,10 +154,10 @@ SkipChecks:
 
     class ScratchVariable_Base {
         public:
-            constexpr std::string & GetName(void) {
+            constexpr std::string_view GetName(void) {
                 return this->Name;
             }
-            constexpr bool IsPublic(void) {
+            constexpr bool IsPublic(void) const {
                 return this->Public;
             }
         protected:
@@ -189,9 +185,8 @@ SkipChecks:
                 this->Public = IsPublic;
             }
 
-            void __hot SetData(BoxedValue && NewData) {
+            inline void __hot SetData(BoxedValue NewData) {
                 this->Data = NewData;
-                NewData = 0;
             }
             constexpr BoxedValue __hot GetData(void) const {
                 return Data;
@@ -233,7 +228,7 @@ SkipChecks:
                 this->Size = this->TotalItems;
             }
 
-            void __hot SwitchToBuffer(void) {
+            void SwitchToBuffer(void) {
                 if (unlikely(std::holds_alternative<uint8_t *>(this->Elements) == true)) {
                     /* you're already a buffer pal */
                     return;
@@ -324,14 +319,12 @@ SkipChecks:
                     }
                     /* lazy load off = all items loaded in the vector */
                     return ListVector.at(Index);
-                } else {
-                    uint8_t * Buffer = std::get<uint8_t *>(this->Elements);
-                    return BoxedValue(static_cast<double>(Buffer[Index]));
                 }
-                __unreachable;
+                uint8_t * Buffer = std::get<uint8_t *>(this->Elements);
+                return BoxedValue(static_cast<double>(Buffer[Index]));
             }
 
-            void __hot Set(const BoxedValue && Data, const size_t Index) {
+            void __hot Set(const BoxedValue Data, const size_t Index) {
                 if (unlikely(Index >= this->TotalItems)) {
                     return;
                 }
@@ -354,11 +347,10 @@ SkipChecks:
                 if (unlikely(HoldsType<double>(Data) == false || UnboxDouble(Data) > 255)) {
                     DebugWarn("If you're going to write data into the buffer, please write a number value under 256, otherwise nothing will be written to the buffer.\n");
                 }
-                // TODO: NanBox unboxing.
                 Buffer[Index] = static_cast<uint8_t>(UnboxDouble(Data));
             }
 
-            void __hot Append(const BoxedValue && Data) {
+            void __hot Append(const BoxedValue Data) {
                 if (auto VectorPtr = std::get_if<std::vector<BoxedValue>>(&this->Elements)) {
                     /* lazy loading is no longer useful */
                     std::vector<BoxedValue> & ListVector = *VectorPtr;

@@ -62,7 +62,7 @@ struct Tachyon_JITState {
 
 class Label {
     public:
-        constexpr Label(uint32_t Id, void * Address) : Id(Id), Start(Address) {}
+        explicit constexpr Label(uint32_t Id, void * Address) : Id(Id), Start(Address) {}
         constexpr bool operator == (const Label & Other) const {
             return (this->Id == Other.Id && this->Start == Other.Start);
         }
@@ -73,7 +73,7 @@ class Label {
 
 class Tachyon_AssemblerBase {
     private:
-        std::vector<Label> Labels;
+        std::vector<Label> LabelPool;
         uint32_t LabelIds = 0;
     protected:
         void * CodeBase;
@@ -110,7 +110,7 @@ class Tachyon_AssemblerBase {
             this->BytesWritten = 0;
             /* allocate jit code buffer */
             this->CodeBase = Tachyon::AllocateJITMemory(this->CodeSize);
-            TachyonAssert(this->Stack != nullptr);
+            TachyonAssert(this->CodeBase != nullptr);
 
             this->CodePointer = static_cast<uint8_t *>(this->CodeBase);
         }
@@ -123,15 +123,22 @@ class Tachyon_AssemblerBase {
         }
 
         /**
+         * @returns Code pointer
+         */
+        inline void * GetCodePointer(void) {
+            return this->CodePointer;
+        }
+
+        /**
          * Creates a new label.
          * @returns The newly created label
          */
-        inline Label CreateLabel(void) {
+        constexpr Label CreateLabel(void) {
             return Label(LabelIds++, this->CodePointer);
         }
 
-        inline void BindLabel(Label & Label) {
-            this->Labels.emplace_back(std::move(Label));
+        constexpr void RegisterLabel(Label & Label) {
+            this->LabelPool.emplace_back(Label);
         } 
 
         /**
@@ -140,14 +147,14 @@ class Tachyon_AssemblerBase {
          * @return A struct containing the generated code, and the code size (in that order).
          */
         [[nodiscard]]
-        inline OutputCodeInfo MakeExecutable(void) {
+        inline OutputCodeInfo Commit(void) {
             TachyonAssert(Tachyon::ProtectJITMemory(this->CodeBase, this->CodeSize) == true);
             OutputCode Entry = reinterpret_cast<OutputCode>(this->CodeBase);
             this->CodeDump();
             return {Entry, this->CodeSize};
         }
 
-        inline void CodeDump(void) const {
+        constexpr void CodeDump(void) const {
             Debug::Hexdump(this->CodeBase, this->BytesWritten);
         }
 
@@ -253,6 +260,10 @@ class GpReg {
 
         constexpr bool operator != (const GpReg::RegisterKind & Reg) const {
             return this->Value != Reg;
+        }
+
+        constexpr GpReg::RegisterKind GetRawValue(void) const {
+            return this->Value;
         }
 
         constexpr uint8_t AsRegID(void) const {
@@ -752,6 +763,8 @@ class Tachyon_AssemblerAMD64 : public Tachyon_AssemblerBase {
 
         void RelCall(const int32_t Disp32);
         void RelCall(const int16_t Disp16);
+        void CallFunction(const void * const FunctionPtr);
+        void IndirectCall(const GpReg & Register);
 
         void Ret(void);
         void Ret(const uint16_t Bytes);

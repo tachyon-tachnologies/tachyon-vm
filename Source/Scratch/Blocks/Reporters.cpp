@@ -5,6 +5,7 @@
 #include <Scratch/BlockFields.hpp>
 #include <Scratch/Blocks.hpp>
 #include <Tachyon/Tachyon.hpp>
+#include <Tachyon/Scheduler.hpp>
 #include <Lib/NanBox.hpp>
 #include <string>
 

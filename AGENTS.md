@@ -5,7 +5,7 @@ This repository implements a Scratch VM in C++ and SDL3. The codebase is a singl
 ## What matters most
 - Build from the repository root.
 - Do not use MSVC: the project explicitly rejects `MSVC` in `CMakeLists.txt`.
-- Use a Clang/GCC toolchain compatible with C++23.
+- Use a Clang/GCC toolchain compatible with C++26.
 - The build disables RTTI and exceptions (`-fno-rtti`, `-fno-exceptions`). Avoid introducing code that requires them.
 - The compiler flags also include `-Wextra`, `-Wpointer-arith`, `-Wcast-align`, `-Wredundant-decls`, `-Wformat`, and `-Wformat-security`.
 

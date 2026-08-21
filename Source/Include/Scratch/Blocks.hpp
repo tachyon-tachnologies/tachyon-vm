@@ -1,29 +1,19 @@
 #pragma once
 
+#include <string>
+
 #include <Tachyon/Debug.hpp>
-#include <Tachyon/Assembler.hpp>
 #include <Scratch/BlockFields.hpp>
-#include <Lib/SIMDJson.h>
+#include <Scratch/Status.hpp>
 #include <Lib/NanBox.hpp>
 #include <Common.hpp>
-#include <string>
+#include <simdjson.h>
 
 using namespace NanBox;
 using namespace simdjson;
 
 namespace Scratch {
     class ScratchSprite;
-
-    /**
-     * Contains status codes returned by opcode handlers.
-     */
-    enum class ScratchStatus : uint8_t {
-        SCRATCH_END, // 0
-        SCRATCH_NEXT, // 1
-        SCRATCH_PAUSE, // 2
-        SCRATCH_WAIT, // 3
-        SCRATCH_WAIT_UNTIL // 4
-    };
 
     class ScratchBlock;
 
@@ -46,7 +36,6 @@ namespace Scratch {
 
     using OpcodeHandler = ScratchStatus (*)(ScratchBlock &);
     using EvaluationHandler = BoxedValue (*)(ScratchBlock &);
-    using CompileHandler = ScratchStatus (*)(TachyonAssembler &, ScratchBlock &);
 
     /**
      * Contains scratch block information.
@@ -64,11 +53,12 @@ namespace Scratch {
              * @param BlockData The block's JSON data.
              * @param Owner The owner of the block
              */
-            ScratchBlock (std::string Key, ondemand::object BlockData, ScratchSprite & Owner) : Sprite(Owner), BlockKey(Key) {
+            ScratchBlock (std::string_view Key, ondemand::object & BlockData, ScratchSprite & Owner) : Sprite(Owner), BlockKey(Key) {
+                BlockData.reset();
                 /*
                     opcode
                 */
-                simdjson::simdjson_result Result = BlockData.find_field_unordered("opcode");
+                auto Result = BlockData.find_field_unordered("opcode");
                 TachyonAssert(Result.error() == error_code::SUCCESS);
                 TachyonAssert(Result.get_string().get(this->Opcode) == error_code::SUCCESS);
                 /*
@@ -92,7 +82,7 @@ namespace Scratch {
                     next
                 */
                 Result = BlockData.find_field_unordered("next");
-                TachyonAssert(Result.error() == error_code::SUCCESS);
+                TachyonAssertMsg(Result.error() == error_code::SUCCESS, "No next block field??");
                 bool IsNull;
                 TachyonAssert(Result.is_null().get(IsNull) == error_code::SUCCESS);
                 if (IsNull == false) {
@@ -102,7 +92,7 @@ namespace Scratch {
                     parent
                 */
                 Result = BlockData.find_field_unordered("parent");
-                TachyonAssert(Result.error() == error_code::SUCCESS);
+                TachyonAssertMsg(Result.error() == error_code::SUCCESS, "No parent block field??");
                 TachyonAssert(Result.is_null().get(IsNull) == error_code::SUCCESS);
                 if (IsNull == false) {
                     TachyonAssert(Result.get_string().get(this->ParentBlock_Key) == error_code::SUCCESS);
@@ -125,7 +115,7 @@ namespace Scratch {
                 TachyonAssert(Result.get_object().get(InputData) == error_code::SUCCESS);
                 for (auto InputField : InputData) {
                     std::string InputKey;
-                    TachyonAssert(InputField.unescaped_key(InputKey) == error_code::SUCCESS);
+                    TachyonAssert(InputField.escaped_key().get(InputKey) == error_code::SUCCESS);
 
                     ondemand::array InputArray;
                     TachyonAssert(InputField.value().get_array().get(InputArray) == error_code::SUCCESS);
@@ -149,7 +139,7 @@ namespace Scratch {
                 TachyonAssert(Result.get_object().get(FieldData) == error_code::SUCCESS);
                 for (auto FieldField : FieldData) {
                     std::string FieldKey;
-                    TachyonAssert(FieldField.unescaped_key(FieldKey) == error_code::SUCCESS);
+                    TachyonAssert(FieldField.escaped_key().get(FieldKey) == error_code::SUCCESS);
 
                     ondemand::array FieldArray;
                     TachyonAssert(FieldField.value().get_array().get(FieldArray) == error_code::SUCCESS);
@@ -163,15 +153,11 @@ namespace Scratch {
                 this->LinkHandlers();
             }
 
-            ~ScratchBlock(void) {
-                this->Inputs.clear();
-            }
-
             /**
              * Gets the block's opcode.
              * @return The block's opcode.
              */
-            constexpr std::string & GetOpcode(void) {
+            constexpr const std::string & GetOpcode(void) const {
                 return this->Opcode;
             }
 
@@ -179,7 +165,7 @@ namespace Scratch {
              * Gets the next block's key.
              * @return The next block's key.
              */
-            constexpr std::string & __hot GetNextKey(void) {
+            constexpr const std::string & __hot GetNextKey(void) const {
                 return this->NextBlock_Key;
             }
 
@@ -187,7 +173,7 @@ namespace Scratch {
              * Gets the parent block's key.
              * @return The parent block's key.
              */
-            constexpr std::string & __hot GetParentKey(void) {
+            constexpr const std::string & __hot GetParentKey(void) const {
                 return this->ParentBlock_Key;
             }
 
@@ -195,7 +181,7 @@ namespace Scratch {
              * Gets the parent block's key.
              * @return The parent block's key.
              */
-            constexpr std::string & __hot GetKey(void) {
+            constexpr const std::string & __hot GetKey(void) const {
                 return this->BlockKey;
             }
 
@@ -203,7 +189,7 @@ namespace Scratch {
              * Checks if the block is a procedure definition.
              * @return True if it's a procedure definition, false if otherwise.
              */
-            constexpr bool IsProcedureDef(void) {
+            constexpr bool IsProcedureDef(void) const {
                 return this->ProcedureDefinition;
             }
 
@@ -211,7 +197,7 @@ namespace Scratch {
              * Checks if the block is a procedure definition.
              * @return True if it's a procedure definition, false if otherwise.
              */
-            constexpr bool IsProcedurePrototype(void) {
+            constexpr bool IsProcedurePrototype(void) const {
                 return this->ProcedurePrototype;
             }
 
@@ -219,7 +205,7 @@ namespace Scratch {
              * Checks if the block is a procedure definition.
              * @return True if it's a procedure definition, false if otherwise.
              */
-            constexpr bool IsProcedureCall(void) {
+            constexpr bool IsProcedureCall(void) const {
                 return this->ProcedureCall;
             }
 
@@ -227,7 +213,7 @@ namespace Scratch {
              * Checks if the block is an argument reporter.
              * @return True if it's an argument reporter, false if otherwise.
              */
-            constexpr bool IsArgumentReporter(void) {
+            constexpr bool IsArgumentReporter(void) const {
                 return this->ArgumentReporter;
             }
             
@@ -256,21 +242,27 @@ namespace Scratch {
             }
 
             /**
-             * Compiles the current block.
-             */
-            inline ScratchStatus __hot CompileBlock(TachyonAssembler & Asm) {
-                if (likely(this->Compile)) {
-                    return this->Compile(Asm, *this);
-                }
-                return ScratchStatus::SCRATCH_END;
-            }
-
-            /**
              * Gets the block's mutation (if it exists).
              */
             [[nodiscard]]
             constexpr ScratchMutation & __hot GetMutation(void) {
                 return this->Mutation.value();
+            }
+
+            /**
+             * Gets the total amount of inputs
+             * @return Total inputs in the block
+             */
+            constexpr size_t GetNumInputs(void) const {
+                return this->Inputs.size();
+            }
+
+            /**
+             * Gets all the inputs in the block.
+             * @returns A vector containing all the block's inputs
+             */
+            constexpr auto GetAllInputs(void) {
+                return this->Inputs;
             }
 
             /**
@@ -311,11 +303,6 @@ namespace Scratch {
              * Should only be used for reporter blocks in interpreter mode.
              */
             EvaluationHandler ReporterHandler = nullptr;
-
-            /**
-             * Should only be used in compiler mode.
-             */
-            CompileHandler Compile = nullptr;
 
             bool Shadow;
             bool TopLevel;

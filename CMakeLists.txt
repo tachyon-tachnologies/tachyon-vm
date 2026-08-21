@@ -1,9 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
 
-if(MSVC)
-    message(FATAL_ERROR "Please use a compiler such as G++ or Clang++")
-endif()
-
 project(
     tachyon-vm
     VERSION 0.01
@@ -11,7 +7,11 @@ project(
     LANGUAGES CXX
 )
 
-set(CMAKE_CXX_STANDARD 23)
+if(MSVC)
+    message(FATAL_ERROR "Please use a compiler such as G++ or Clang++")
+endif()
+
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(TACHYON_SOURCE "${CMAKE_SOURCE_DIR}/Source")
@@ -25,16 +25,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE "${TACHYON_SOURCE}/Include")
 target_compile_options(${PROJECT_NAME} PRIVATE
     -Werror
     -Wextra
-    -Wpointer-arith
-    -Wcast-align
-    -Wwrite-strings
-    -Wredundant-decls
-    -Wformat
-    -Wformat-security
-    -Wno-missing-field-initializers
     -fno-rtti
     -fno-exceptions
     -march=native
+    -freflection
 )
 
 # SDl3
@@ -44,3 +38,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)
 # libzip
 find_package(libzip CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE libzip::zip)
+
+# simdjson
+find_package(simdjson CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE simdjson::simdjson)

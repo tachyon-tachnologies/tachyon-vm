@@ -1,29 +1,35 @@
 #include <Tachyon/Tachyon.hpp>
+#include <Tachyon/Scheduler.hpp>
 #include <Tachyon/Debug.hpp>
 #include <Scratch/Common.hpp>
 #include <Scratch/Blocks.hpp>
-#include <Lib/SIMDJson.h>
+#include <simdjson.h>
 #include <zip.h>
 
 using namespace simdjson;
 using namespace Scratch;
 
 void __hot ScratchSprite::CachePointers(void) {
-    for(auto & Item : this->GreenFlags) {
-        ScratchBlock * GreenFlagBlock = Item.second.get();
-        TachyonAssert(GreenFlagBlock != nullptr);
+    auto Cache = [this](auto & Map) {   
+        for(auto & Item : Map) {
+            ScratchBlock * GreenFlagBlock = Item.second.get();
+            TachyonAssert(GreenFlagBlock != nullptr);
 
-        ScratchBlock * Block = GreenFlagBlock;
-        ScratchBlock * LastBlock = nullptr;
-        
-        while(Block) {
-            if (LastBlock) {
-                LastBlock->NextBlock_Pointer = Block;
+            ScratchBlock * Block = GreenFlagBlock;
+            ScratchBlock * LastBlock = nullptr;
+
+            while(Block) {
+                if (LastBlock) {
+                    LastBlock->NextBlock_Pointer = Block;
+                }
+                LastBlock = Block;
+                Block = this->GetBlockFromId(Block->GetNextKey());
             }
-            LastBlock = Block;
-            Block = this->GetBlockFromId(Block->GetNextKey());
         }
-    }
+    };
+    Cache(this->GreenFlags);
+    Cache(this->ProcedureDefinitions);
+    Cache(this->BroadcastReceivers);
 }
 
 void __hot ScratchSprite::CreateScript(ScratchBlock & Block) {
@@ -39,12 +45,12 @@ void ScratchSprite::CreateScripts(void) {
     for(auto & Item : this->GreenFlags) {
         ScratchBlock & Block = *Item.second;
         ScratchScript Script(Block.GetKey(), this);
-        DebugInfo("Created script for constume '%s'\n", this->GetName().c_str());
+        DebugInfo("Created script for constume '%s'\n", this->GetName().data());
         this->Scripts.emplace_back(std::move(Script));
     }
 }
 
-ScratchList * __hot ScratchSprite::GetListFromKey(std::string ListKey) {           
+ScratchList * __hot ScratchSprite::GetListFromKey(const std::string & ListKey) {           
     /* check if it's local */
     auto LocalItem = this->Lists.find(ListKey);
     if (LocalItem != this->Lists.end()) {
@@ -66,9 +72,9 @@ ScratchList * __hot ScratchSprite::GetListFromKey(std::string ListKey) {
     return &GlobalItem->second;
 }
 
-ScratchVariable * __hot ScratchSprite::GetVariableFromKey(std::string VarKey) {           
+ScratchVariable * __hot ScratchSprite::GetVariableFromKey(const std::string & VarKey) {           
     /* check if it's local */
-    auto LocalItem = this->Variables.find(VarKey);
+    auto LocalItem = this->Variables.find(VarKey.c_str());
     if (LocalItem != this->Variables.end()) {
         return &LocalItem->second;
     }
@@ -82,7 +88,7 @@ ScratchVariable * __hot ScratchSprite::GetVariableFromKey(std::string VarKey) {
     ScratchSprite * Stage = Tachyon::GetStage();
     TachyonAssert(Stage != nullptr);
     
-    auto GlobalItem = Stage->Variables.find(VarKey);
+    auto GlobalItem = Stage->Variables.find(VarKey.c_str());
 
     if (unlikely(GlobalItem == Stage->Variables.end())) {
         return nullptr;
@@ -91,8 +97,8 @@ ScratchVariable * __hot ScratchSprite::GetVariableFromKey(std::string VarKey) {
     return &GlobalItem->second;
 }
 
-ScratchList * __hot ScratchSprite::GetList(std::string ListName) {           
-    auto LocalItem = this->ListKeyLUT.find(ListName);
+ScratchList * __hot ScratchSprite::GetList(const std::string & ListName) {           
+    auto LocalItem = this->ListKeyLUT.find(ListName.c_str());
     if (LocalItem != this->ListKeyLUT.end()) {
         return &this->Lists.at(LocalItem->second);
     }
@@ -106,7 +112,7 @@ ScratchList * __hot ScratchSprite::GetList(std::string ListName) {
     ScratchSprite * Stage = Tachyon::GetStage();
     TachyonAssert(Stage != nullptr);
 
-    auto GlobalItem = Stage->ListKeyLUT.find(ListName);
+    auto GlobalItem = Stage->ListKeyLUT.find(ListName.c_str());
 
     if (unlikely(GlobalItem == Stage->ListKeyLUT.end())) {
         return nullptr;
@@ -115,8 +121,8 @@ ScratchList * __hot ScratchSprite::GetList(std::string ListName) {
     return &Stage->Lists.at(GlobalItem->second);
 }
 
-ScratchVariable * __hot ScratchSprite::GetVariable(std::string VarName) {           
-    auto LocalItem = this->VariableKeyLUT.find(VarName);
+ScratchVariable * __hot ScratchSprite::GetVariable(const std::string & VarName) {           
+    auto LocalItem = this->VariableKeyLUT.find(VarName.c_str());
     if (LocalItem != this->VariableKeyLUT.end()) {
         return &this->Variables.at(LocalItem->second);
     }
@@ -130,7 +136,7 @@ ScratchVariable * __hot ScratchSprite::GetVariable(std::string VarName) {
     ScratchSprite * Stage = Tachyon::GetStage();
     TachyonAssert(Stage != nullptr);
 
-    auto GlobalItem = Stage->VariableKeyLUT.find(VarName);
+    auto GlobalItem = Stage->VariableKeyLUT.find(VarName.c_str());
 
     if (unlikely(GlobalItem == Stage->VariableKeyLUT.end())) {
         return nullptr;

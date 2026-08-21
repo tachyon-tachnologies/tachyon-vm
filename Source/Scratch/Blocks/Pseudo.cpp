@@ -29,7 +29,7 @@ static ScratchStatus __hot Tachyon_LoadU8Buffer(ScratchBlock & Block) {
         List->SwitchToBuffer();
         return ScratchStatus::SCRATCH_NEXT;
     }
-    DebugWarn("Failed to load buffer: Invalid name: \"%s\"\n", ListName.c_str());
+    DebugWarn("Failed to load buffer: Invalid name: \"%s\"\n", ListName.data());
     return ScratchStatus::SCRATCH_NEXT;
 }
 
@@ -66,7 +66,7 @@ ScratchStatus __hot Pseudo::Execute(std::string ProcCode, Scratch::ScratchBlock 
     return Item->second(Block);
 }
 
-static void RegisterPseudoHandler(std::string_view ProcCode, OpcodeHandler Handler) {
+static void RegisterPseudoHandler(std::string ProcCode, OpcodeHandler Handler) {
     TachyonAssert(PseudoHandlers.find(ProcCode) == PseudoHandlers.end());
     PseudoHandlers.emplace(ProcCode, Handler);
 }

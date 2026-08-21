@@ -13,118 +13,23 @@
 #include <Scratch/Procedures.hpp>
 #include <Scratch/Motion.hpp>
 #include <Scratch/Blocks.hpp>
+#include <Scratch/Scripts.hpp>
 #include <Scratch/Data.hpp>
-#include <Lib/SIMDJson.h>
-
+#include <simdjson.h>
 
 using namespace NanBox;
 using namespace simdjson;
-
-/* control flags. any bits that arent here are reserved */
-#define SCRIPT_INSIDE_PROCEDURE         (1 << 0)
-#define SCRIPT_INVALIDATE_BLOCK         (1 << 1)
-#define SCRIPT_SHOULD_STAY              (1 << 2)
 
 namespace Scratch {
 
     class ScratchSprite;
 
     /**
-     * Stack information for script.
-     */
-    struct Script_StackFrame {
-        std::string ReturnId;
-        std::string RepeatId;
-        std::variant<double, ScratchBlock *> RepeatCondition;
-        bool InsideProcedure;
-    };
-
-    using ProcedureBindings = std::unordered_map<std::string, BoxedValue>;
-
-    /**
-     * Contains the information of a script.
-     */
-    class ScratchScript {
-        public:
-            std::string FirstBlockId;
-            std::string CurrentBlockId;
-            ScratchSprite * Sprite;
-            ScratchStatus CurrentStatus;
-            Tachyon_JITState JITState = {};
-            uint8_t ControlFlags;
-
-            inline void __hot SetControlFlag(const uint8_t Flag) {
-                this->ControlFlags |= Flag;
-            }
-
-            inline void __hot UnsetControlFlag(const uint8_t Flag) {
-                this->ControlFlags &= ~Flag;
-            }
-
-            constexpr bool __hot GetControlFlag(const uint8_t Flag) {
-                return (this->ControlFlags & Flag);
-            }
-
-            inline void __hot Return(void) {
-                TachyonAssertMsg(this->ReturnStack.empty() == false, "Stack underflow!\n");
-
-                const Script_StackFrame & CurrentStackFrame = this->ReturnStack.back();
-                /* restore procedure control flag */
-                this->ControlFlags &= ~(SCRIPT_INSIDE_PROCEDURE);
-                this->ControlFlags |= CurrentStackFrame.InsideProcedure;
-
-                this->CurrentBlockId = CurrentStackFrame.ReturnId;
-                this->ReturnStack.pop_back();
-            }
-
-            inline void __hot UnbindParameters(void) {
-                TachyonAssertMsg(this->ParamBindings.empty() == false, "Parameter bindings are empty??\n");
-                this->ParamBindings.pop_back();
-            }
-
-            inline ScratchStatus __hot RecursiveReturn(void) {
-                while(likely(this->CurrentBlockId.empty() == true)) {
-                    if (this->GetControlFlag(SCRIPT_INSIDE_PROCEDURE) == false) {
-                        return ScratchStatus::SCRATCH_END;
-                    }
-                    this->Return();
-                    this->UnbindParameters();
-                }
-                return ScratchStatus::SCRATCH_NEXT;
-            }
-
-            inline void StackPush(const Script_StackFrame Frame) {
-                this->ReturnStack.push_back(Frame);
-            }
-
-            inline std::vector<ProcedureBindings> & GetParameterBindings(void) {
-                return this->ParamBindings;
-            }
-
-            ScratchScript() = default;
-            ScratchScript(const std::string CurrentBlockKey, ScratchSprite * Owner) : FirstBlockId(CurrentBlockKey), CurrentBlockId(CurrentBlockKey), Sprite(Owner) {
-                this->CurrentStatus = ScratchStatus::SCRATCH_END;
-                this->ControlFlags = 0;
-                this->ParamBindings = {};
-                this->ReturnStack = {};
-                this->ParamBindings.reserve(4);
-                this->ReturnStack.reserve(32);
-            }
-        private:
-            std::vector<Script_StackFrame> ReturnStack;
-            std::vector<ProcedureBindings> ParamBindings;
-    };
-
-    static constexpr bool __hot ShouldRepeatConditionally(const Script_StackFrame & Frame) {
-        return std::holds_alternative<ScratchBlock *>(Frame.RepeatCondition);
-    }
-
-    /**
      * Only works for block keys.
      * @param The block key
      * @return A 64-bit ID
      */
-    inline uint64_t __hot IdToU64(const std::string_view Key) {
+    inline uint64_t __hot IdToU64(std::string_view Key) {
         uint64_t IdU64 = 0;
         memcpy(&IdU64, Key.data(), std::min(Key.size(), sizeof(uint64_t)));
         return IdU64;
@@ -132,10 +37,10 @@ namespace Scratch {
 
     class ScratchAsset {
         public:
-            constexpr const std::string & GetName(void) {
+            constexpr std::string_view GetName(void) const {
                 return this->Name;
             }
-            constexpr const std::string & GetFilename(void) {
+            constexpr std::string_view GetFilename(void) const {
                 return this->Filename;
             }
         protected:
@@ -230,7 +135,7 @@ namespace Scratch {
              * Gets the Scratch sprite's name.
              * @return The sprite's name.
              */
-            constexpr const std::string & GetName(void) {
+            constexpr std::string_view GetName(void) {
                 return this->Name;
             }
             /**
@@ -281,7 +186,7 @@ namespace Scratch {
                 /*
                     isStage
                 */
-                simdjson::simdjson_result Result = SpriteData.find_field_unordered("isStage");
+                auto Result = SpriteData.find_field_unordered("isStage");
                 TachyonAssert(Result.error() == error_code::SUCCESS);
                 TachyonAssert(Result.get_bool().get(this->StageSprite) == error_code::SUCCESS);
 
@@ -305,10 +210,9 @@ namespace Scratch {
                     X and Y (if they're present)
                 */
                 if (this->StageSprite == false) {
-                    simdjson::simdjson_result ResultX = SpriteData.find_field_unordered("x");
-                    simdjson::simdjson_result ResultY = SpriteData.find_field_unordered("y");
-                    TachyonAssert(ResultX.error() == error_code::SUCCESS);
-                    TachyonAssert(ResultY.error() == error_code::SUCCESS);
+                    auto ResultX = SpriteData.find_field_unordered("x");
+                    auto ResultY = SpriteData.find_field_unordered("y");
+                    TachyonAssert(ResultX.error() == error_code::SUCCESS && ResultY.error() == error_code::SUCCESS);
                     
                     TachyonAssert(ResultX.get_double().get(this->Position.first) == error_code::SUCCESS);
                     TachyonAssert(ResultY.get_double().get(this->Position.second) == error_code::SUCCESS);
@@ -323,7 +227,7 @@ namespace Scratch {
 
                 for (auto VariableField : VariableData) {
                     std::string VariableKey;
-                    TachyonAssert(VariableField.unescaped_key(VariableKey) == error_code::SUCCESS);
+                    TachyonAssert(VariableField.escaped_key().get(VariableKey) == error_code::SUCCESS);
                     
                     ondemand::array VariableArray;
                     TachyonAssert(VariableField.value().get_array().get(VariableArray) == error_code::SUCCESS);
@@ -346,7 +250,7 @@ namespace Scratch {
 
                 for (auto ListField : ListData) {
                     std::string ListKey;
-                    TachyonAssert(ListField.unescaped_key(ListKey) == error_code::SUCCESS);
+                    TachyonAssert(ListField.escaped_key().get(ListKey) == error_code::SUCCESS);
 
                     ondemand::array ListArray;
                     TachyonAssert(ListField.value().get_array().get(ListArray) == error_code::SUCCESS);
@@ -401,7 +305,7 @@ namespace Scratch {
 
                 for (auto BlockField : BlockData) {
                     std::string BlockKey;
-                    TachyonAssert(BlockField.unescaped_key(BlockKey) == error_code::SUCCESS);
+                    TachyonAssert(BlockField.escaped_key().get(BlockKey) == error_code::SUCCESS);
 
                     uint64_t BlockIdU64 = IdToU64(BlockKey);
 
@@ -433,11 +337,11 @@ namespace Scratch {
 
             void CreateScript(ScratchBlock & Block);
 
-            ScratchVariable * __hot GetVariableFromKey(std::string VarKey);
-            ScratchList * __hot GetListFromKey(std::string ListKey);           
+            ScratchVariable * __hot GetVariableFromKey(const std::string & VarKey);
+            ScratchList * __hot GetListFromKey(const std::string & ListKey);
 
-            ScratchVariable * __hot GetVariable(std::string VarName);
-            ScratchList * __hot GetList(std::string ListName); 
+            ScratchVariable * __hot GetVariable(const std::string & VarName);
+            ScratchList * __hot GetList(const std::string & ListName); 
 
             std::map<uint64_t, std::unique_ptr<ScratchBlock>> GreenFlags;
             std::unordered_map<uint64_t, std::unique_ptr<ScratchBlock>> BroadcastReceivers;
@@ -452,7 +356,7 @@ namespace Scratch {
             std::vector<ScratchSound> Sounds;
             std::vector<ScratchCostume> Costumes;
             std::vector<ScratchScript> Scripts;
-            std::vector<ScratchProcedure> Procedures;
+            std::unordered_map<std::string, ScratchProcedure> Procedures;
             ScratchPosition Position;
 
         private:
@@ -496,9 +400,10 @@ namespace Scratch {
              * De-initializes and closes the project and it's file.
              */
             void Close(void) {
-                TachyonAssert(this->ProjectZip != nullptr);
-                if (zip_close(this->ProjectZip) < 0) {
-                    zip_discard(this->ProjectZip);
+                if (this->ProjectZip != nullptr) {
+                    if (zip_close(this->ProjectZip) < 0) {
+                        zip_discard(this->ProjectZip);
+                    }
                 }
                 this->Sprites.clear();
                 this->ProjectZip_Path.clear();

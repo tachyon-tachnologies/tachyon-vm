@@ -68,8 +68,11 @@ void __hot Tachyon::MainLoop(void) {
                     VM.ShouldExit = true;
                     return;
                 case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-                    VM.ShouldExit = true;
-                    return;
+                    if (event.window.windowID == SDL_GetWindowID(VM.TachyonWindow)) {
+                        VM.ShouldExit = true;
+                        return;
+                    }
+                    break;
                 default:
                     break;
             }

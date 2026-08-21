@@ -14,7 +14,7 @@ using namespace Scratch;
 
 static ScratchStatus EventBroadcastAndWait(ScratchBlock & Block) {
     ScratchSprite & Owner = Block.GetOwnerSprite();
-    /* TODO: do the same thing as EventBroadcastAsync but instead of creating a seperate script, push it in the call stack */
+    /* TODO: do the same thing as EventBroadcast but instead of creating a seperate script, push it in the call stack */
     return ScratchStatus::SCRATCH_NEXT;
 }
 
@@ -51,24 +51,9 @@ static ScratchStatus EventBroadcast(ScratchBlock & Block) {
     }
     return ScratchStatus::SCRATCH_NEXT;
 }
-
-/**
- * Compiler implementations ----
- */
-
-static ScratchStatus EventFlagClicked(TachyonAssembler & Asm, ScratchBlock & __unused Block) {
-    ScratchScript * Script = Tachyon::GetCurrentScript();
-    if (unlikely(Script == nullptr)) {
-        return ScratchStatus::SCRATCH_END;
-    }
-    Asm.EmitMainPrologue(Script->JITState);
-    return ScratchStatus::SCRATCH_NEXT;
-}
  
 void Events::RegisterAll(void) {
     /* interpreter */
     Tachyon::RegisterOpHandler("event_broadcast", EventBroadcast);
     Tachyon::RegisterOpHandler("event_broadcastandwait", EventBroadcastAndWait);
-    /* compiler */
-    Tachyon::RegisterCompileHandler("event_whenflagclicked", EventFlagClicked);
 }

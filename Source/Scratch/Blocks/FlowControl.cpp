@@ -4,6 +4,7 @@
 #include <Scratch/BlockFields.hpp>
 #include <Scratch/Blocks.hpp>
 #include <Tachyon/Tachyon.hpp>
+#include <Tachyon/Scheduler.hpp>
 #include <Tachyon/Debug.hpp>
 #include <Lib/NanBox.hpp>
 #include <Common.hpp>
@@ -126,7 +127,7 @@ static ScratchStatus __hot ControlFlow_Repeat(ScratchBlock & Block) {
         .InsideProcedure = bool(CurrentScript->GetControlFlag(SCRIPT_INSIDE_PROCEDURE)) 
     });
     CurrentScript->CurrentBlockId = SubstackFirstBlock;
-    CurrentScript->SetControlFlag((SCRIPT_INVALIDATE_BLOCK | SCRIPT_SHOULD_STAY));
+    CurrentScript->SetControlFlag(SCRIPT_INVALIDATE_BLOCK | SCRIPT_SHOULD_STAY);
     return ScratchStatus::SCRATCH_NEXT;
 }
 
@@ -161,7 +162,7 @@ static ScratchStatus __hot ControlFlow_While(ScratchBlock & Block) {
         .InsideProcedure = bool(CurrentScript->GetControlFlag(SCRIPT_INSIDE_PROCEDURE)) 
     });
     CurrentScript->CurrentBlockId = SubstackFirstBlock;
-    CurrentScript->SetControlFlag((SCRIPT_INVALIDATE_BLOCK | SCRIPT_SHOULD_STAY));
+    CurrentScript->SetControlFlag(SCRIPT_INVALIDATE_BLOCK | SCRIPT_SHOULD_STAY);
     return ScratchStatus::SCRATCH_NEXT;
 }
 

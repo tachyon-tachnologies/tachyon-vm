@@ -8,7 +8,7 @@ using namespace Scratch;
 using namespace NanBox;
 
 /*
-    Interpreter list handling
+    Interpreter data handling
 */
 
 static ScratchStatus __hot Data_DeleteAllOfList(ScratchBlock & Block) {
@@ -28,7 +28,7 @@ static ScratchStatus __hot Data_AddToList(ScratchBlock & Block) {
 
     ScratchList * List = std::get<ScratchList *>(Field.Field);
 
-    List->Append(std::move(Data));
+    List->Append(Data);
     return ScratchStatus::SCRATCH_NEXT;
 }
 
@@ -44,7 +44,7 @@ static ScratchStatus __hot Data_ReplaceItem(ScratchBlock & Block) {
     if (unlikely(HoldsType<std::string>(Index))) {
         std::string & IndexString = UnboxString(Index);
         if (IndexString == "last") {
-            List->Set(std::move(Data), List->TotalItems - 1);
+            List->Set(Data, List->TotalItems - 1);
         } else {
             DebugWarn("Invalid item replace index string.\n");
         }
@@ -55,7 +55,7 @@ static ScratchStatus __hot Data_ReplaceItem(ScratchBlock & Block) {
     if (IndexNum < 0) {
         return ScratchStatus::SCRATCH_NEXT;
     }
-    List->Set(std::move(Data), IndexNum - 1);
+    List->Set(Data, IndexNum - 1);
     return ScratchStatus::SCRATCH_NEXT;
 }
 
@@ -92,7 +92,7 @@ static ScratchStatus __hot Data_SetVariable(ScratchBlock & Block) {
 
     ScratchVariable * Variable = std::get<ScratchVariable *>(Field.Field);
     BoxedValue Data = Block.GetInputData(0);
-    Variable->SetData(std::move(Data));
+    Variable->SetData(Data);
     return ScratchStatus::SCRATCH_NEXT;
 }
 

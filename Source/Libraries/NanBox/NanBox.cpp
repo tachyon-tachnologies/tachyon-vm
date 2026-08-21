@@ -2,7 +2,6 @@
 #include <iostream>
 #include <string>
 #include <type_traits>
-#include <typeinfo>
 #include <Tachyon/Debug.hpp>
 #include <Tachyon/GC.hpp>
 #include <Lib/NanBox.hpp>
@@ -13,13 +12,11 @@ using namespace NanBox;
 
 BoxedValue __hot NanBox::Box(double Number) {
     BoxedValue Boxed = std::bit_cast<BoxedValue>(Number);
-    // DebugInfo("%.0f -> 0x%016zx...\n", Number, Boxed);
     return Boxed;
 }
 
 BoxedValue __hot NanBox::Box(bool Boolean) {
     BoxedValue Boxed = (NANBOX_NORMAL_MASK | static_cast<uint64_t>(Boolean)); 
-    // DebugInfo("boolean -> 0x%016zx...\n", Boxed);
     return Boxed;
 }
 
@@ -64,6 +61,7 @@ std::string __hot NanBox::UnboxAsString(BoxedValue Value) {
     if (IsBoolean(Value)) {
         return (Value & 1) ? "true" : "false";
     }
+    // TODO: remove fixed buffer
     char Buffer[64];
     std::to_chars_result Result = std::to_chars(Buffer, Buffer + sizeof(Buffer), std::bit_cast<double>(Value), std::chars_format::fixed);
     return std::string(Buffer, Result.ptr);

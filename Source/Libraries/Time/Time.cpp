@@ -50,13 +50,14 @@ double __hot Time::GetYear(void) {
 
 double __hot Time::GetDaysSince2000(void) {
     /* boy is lambda useful */
-    static const auto start = []() {
-        struct tm start_tm = {.tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = 1, .tm_mon = 0, .tm_year = 2000 - 1900};
-        return std::chrono::system_clock::from_time_t(mktime(&start_tm));
-    }();
+    // static const auto start = []() {
+    //     struct tm start_tm = {.tm_sec = 0, .tm_min = 0, .tm_hour = 0, .tm_mday = 1, .tm_mon = 0, .tm_year = 2000 - 1900};
+    //     return std::chrono::system_clock::from_time_t(mktime(&start_tm));
+    // }();
 
-    const auto now = std::chrono::system_clock::now();
-    const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+    // const auto now = std::chrono::system_clock::now();
+    // const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
 
-    return (millis / 86400000.0);
+    // return (millis / 86400000.0);
+    return 0.0;
 }

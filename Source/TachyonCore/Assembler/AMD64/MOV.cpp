@@ -2,7 +2,9 @@
 #include <Tachyon/Debug.hpp>
 #include <cstdint>
 
-// Immediate to register versions
+/*
+    MOVE Immediate -> Register 
+*/
 
 void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, uint8_t Src) {
     TachyonAssertMsg(Dest.Is8bit() == true, "Invalid combination of operands. Should be mov r8, imm8\n");
@@ -37,10 +39,32 @@ void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, uint64_t Src) {
     this->Write64(Src);
 }
 
-// Various memory access versions
+/*
+    MOVE Register -> Register 
+*/
 
-// mov r/m, reg
-// 8-bit, 16-bit, 32-bit, and 64-bit
+
+/**
+ * mov r/m, reg
+ * Operand sizes: 8-bit, 16-bit, 32-bit, 64-bit
+ *
+ * @param Dest A place in memory
+ * @param Src The value to write
+ */
+// void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, const GpReg & Src) {
+// }
+
+/*
+    MOVE Memory -> Register 
+*/
+
+/**
+ * mov [r/m], reg
+ * Operand sizes: 8-bit, 16-bit, 32-bit, 64-bit
+ *
+ * @param Dest A place in memory
+ * @param Src The value to write
+ */
 void Tachyon_AssemblerAMD64::Mov(const Mem & Dest, const GpReg & Src) {
     /* address size, operand size, and finally REX */
     if (Dest.IsRegister()) {
@@ -59,7 +83,7 @@ void Tachyon_AssemblerAMD64::Mov(const Mem & Dest, const GpReg & Src) {
     this->SetREX_RegExtension(REX, Src.RequiresREX());
     /* opcode */
     uint8_t TargetOpcode = Src.Is8bit() == true ? TargetOpcode = 0x88 : TargetOpcode = 0x89;
-    /* modr/m */
+    /* ModRM */
     uint8_t ModRM;
     // TODO: could possibly be turnt into a seperate function
     this->SetModRM_Register(ModRM, Src, false, false);

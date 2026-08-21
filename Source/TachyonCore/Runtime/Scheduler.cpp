@@ -5,6 +5,7 @@
 #include <Tachyon/Tachyon.hpp>
 #include <Tachyon/Debug.hpp>
 #include <Tachyon/Compiler.hpp>
+#include <Tachyon/Scheduler.hpp>
 #include <string_view>
 #include <deque>
 
@@ -37,11 +38,6 @@ static std::unordered_map<std::string_view, OpcodeHandler> OpcodeHandlers;
  */
 static std::unordered_map<std::string_view, EvaluationHandler> ReporterHandlers;
 
-/**
- * Map containing all reporter handlers.
- */
-static std::unordered_map<std::string_view, CompileHandler> CompileHandlers;
-
 void ScratchBlock::LinkHandlers(void) {
     /* interpreter opcode handler */
     auto OpItem = OpcodeHandlers.find(this->Opcode);
@@ -53,11 +49,6 @@ void ScratchBlock::LinkHandlers(void) {
     if (EvalItem != ReporterHandlers.end()) {
         this->ReporterHandler = EvalItem->second;
     }
-    /* compiler handler */
-    auto CompileHandlerItem = CompileHandlers.find(this->Opcode);
-    if (CompileHandlerItem != CompileHandlers.end()) {
-        this->Compile = CompileHandlerItem->second;
-    }
 }
 
 void Tachyon::RegisterOpHandler(std::string_view Opcode, OpcodeHandler Handler) {
@@ -68,11 +59,6 @@ void Tachyon::RegisterOpHandler(std::string_view Opcode, OpcodeHandler Handler) 
 void Tachyon::RegisterEvaluationHandler(std::string_view Opcode, EvaluationHandler Handler) {
     TachyonAssert(ReporterHandlers.find(Opcode) == ReporterHandlers.end());
     ReporterHandlers.emplace(Opcode, Handler);
-}
-
-void Tachyon::RegisterCompileHandler(std::string_view Opcode, CompileHandler Handler) {
-    TachyonAssert(CompileHandlers.find(Opcode) == CompileHandlers.end());
-    CompileHandlers.emplace(Opcode, Handler);
 }
 
 /**
@@ -142,7 +128,7 @@ bool __hot Tachyon::Step(void) {
     OutputCodeInfo & CodeInfo = CurrentScript->JITState.CodeInfo;
     if (CodeInfo.CodeEntry == nullptr) {
         DebugInfo("Script is not yet compiled. Compiling...\n");
-        Tachyon::Compile(*CurrentScript, CurrentScript->FirstBlockId);
+        CurrentScript->JITState.CodeInfo = Tachyon::Compile(*CurrentScript, CurrentScript->FirstBlockId);
         return false;
     } else {
         /* flush instruction cache */
