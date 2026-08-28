@@ -48,11 +48,31 @@ void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, uint64_t Src) {
  * mov r/m, reg
  * Operand sizes: 8-bit, 16-bit, 32-bit, 64-bit
  *
- * @param Dest A place in memory
+ * @param Dest The register to write to
  * @param Src The value to write
  */
-// void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, const GpReg & Src) {
-// }
+void Tachyon_AssemblerAMD64::Mov(const GpReg & Dest, const GpReg & Src) {
+    /* looks like shit, but i will try to refine it later */
+    uint8_t Opcode = 0x89; // default (not 8-bit)
+    if (Dest.Is64bit()) {
+        TachyonAssertMsg(Src.Is64bit(), "Expected both operands to be 64-bit!!");
+        this->EmitREX(true, Src.RequiresREX(), false, Dest.RequiresREX());
+    } else if (Dest.Is32bit()) {
+        TachyonAssertMsg(Src.Is32bit(), "Expected both operands to be 32-bit!!");
+    } else if (Dest.Is16bit()) {
+        TachyonAssertMsg(Src.Is16bit(), "Expected both operands to be 16-bit!!");
+        this->EmitOpsizePrefix();
+    } else if (Dest.Is8bit()) {
+        TachyonAssertMsg(Src.Is8bit(), "Expected both operands to be 8-bit!!");
+        Opcode = 0x88;
+    }
+    uint8_t ModRM = ModType::DIRECT_REGISTER << 6;
+    this->SetModRM_Register(ModRM, Dest, true, false);
+    this->SetModRM_Register(ModRM, Src, false, false);
+    
+    this->Write8(Opcode);
+    this->Write8(ModRM);
+}
 
 /*
     MOVE Memory -> Register 

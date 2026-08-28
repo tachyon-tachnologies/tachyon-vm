@@ -30,7 +30,7 @@ namespace Scratch {
 
             ScratchField(ScratchBlock & Owner, const std::string & Key, simdjson::ondemand::array & FieldObject);
 
-            std::variant<ScratchList *, ScratchVariable *, std::string> Field;
+            std::variant<ScratchList *, ScratchVariable *, std::string> Value;
         private:
             void ParseDataField(simdjson::ondemand::array & FieldObject, ScratchBlock & Block);
             void ParseBroadcastField(simdjson::ondemand::array & FieldObject);
@@ -92,19 +92,19 @@ namespace Scratch {
                 return this->Reporter;
             }
 
-            constexpr ScratchBlock * GetReporterBlock(void) {
-                return this->ReporterBlock;
+            constexpr ScratchShadow GetShadowType(void) const {
+                return this->ShadowType;
             }
 
             ScratchInput(ScratchBlock & Owner, const std::string & Key, simdjson::ondemand::array & InputObject);
 
+            ScratchBlock * ReporterBlock = nullptr;
             std::variant<Input_Value, std::string> Input;
         private:
             void ParseValueInput(ScratchSprite & Owner, simdjson::ondemand::array & InputObject);
             void ParseProcedureDefinition(simdjson::ondemand::array & InputObject);
             void ParseControlInput(simdjson::ondemand::array & InputObject);
 
-            ScratchBlock * ReporterBlock = nullptr;
             InputType Type;
             ScratchShadow ShadowType;
             bool Reporter;

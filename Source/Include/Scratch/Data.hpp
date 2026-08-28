@@ -154,7 +154,7 @@ SkipChecks:
 
     class ScratchVariable_Base {
         public:
-            constexpr std::string_view GetName(void) {
+            constexpr const std::string & GetName(void) {
                 return this->Name;
             }
             constexpr bool IsPublic(void) const {
@@ -188,7 +188,7 @@ SkipChecks:
             inline void __hot SetData(BoxedValue NewData) {
                 this->Data = NewData;
             }
-            constexpr BoxedValue __hot GetData(void) const {
+            constexpr const BoxedValue & __hot GetData(void) const {
                 return Data;
             }
         private:

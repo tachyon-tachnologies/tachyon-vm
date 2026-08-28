@@ -16,7 +16,7 @@ static __hot BoxedValue Sensing_Current(ScratchBlock & Block) {
 
     TachyonAssert(Field.IsType(FieldType::StringField));
 
-    std::string What = std::get<std::string>(Field.Field);
+    std::string What = std::get<std::string>(Field.Value);
 
     if (What == "YEAR") { return Box(Tachyon::Time::GetYear()); }
     if (What == "MONTH") { return Box(Tachyon::Time::GetMonth()); }

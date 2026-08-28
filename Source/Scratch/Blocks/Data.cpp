@@ -15,7 +15,7 @@ static ScratchStatus __hot Data_DeleteAllOfList(ScratchBlock & Block) {
     const ScratchField & Field = Block.GetField(0);
     TachyonAssert(Field.IsType(FieldType::ListField));
 
-    ScratchList * List = std::get<ScratchList *>(Field.Field);
+    ScratchList * List = std::get<ScratchList *>(Field.Value);
 
     List->ClearElements();
     return ScratchStatus::SCRATCH_NEXT;
@@ -26,7 +26,7 @@ static ScratchStatus __hot Data_AddToList(ScratchBlock & Block) {
     const ScratchField & Field = Block.GetField(0);
     TachyonAssert(Field.IsType(FieldType::ListField));
 
-    ScratchList * List = std::get<ScratchList *>(Field.Field);
+    ScratchList * List = std::get<ScratchList *>(Field.Value);
 
     List->Append(Data);
     return ScratchStatus::SCRATCH_NEXT;
@@ -39,7 +39,7 @@ static ScratchStatus __hot Data_ReplaceItem(ScratchBlock & Block) {
 
     TachyonAssert(Field.IsType(FieldType::ListField));
 
-    ScratchList * List = std::get<ScratchList *>(Field.Field);
+    ScratchList * List = std::get<ScratchList *>(Field.Value);
 
     if (unlikely(HoldsType<std::string>(Index))) {
         std::string & IndexString = UnboxString(Index);
@@ -65,7 +65,7 @@ static BoxedValue __hot Data_ItemOfList(ScratchBlock & Block) {
 
     TachyonAssert(Field.IsType(FieldType::ListField));
 
-    ScratchList * List = std::get<ScratchList *>(Field.Field);
+    ScratchList * List = std::get<ScratchList *>(Field.Value);
 
     double IndexNum = UnboxAsDouble(Index); 
     if (IndexNum < 0) {
@@ -80,7 +80,7 @@ static BoxedValue __hot Data_LengthOfList(ScratchBlock & Block) {
 
     TachyonAssert(Field.IsType(FieldType::ListField));
 
-    ScratchList * List = std::get<ScratchList *>(Field.Field);
+    ScratchList * List = std::get<ScratchList *>(Field.Value);
 
     return Box(static_cast<double>(List->TotalItems));
 }
@@ -90,7 +90,7 @@ static ScratchStatus __hot Data_SetVariable(ScratchBlock & Block) {
 
     TachyonAssert(Field.IsType(FieldType::VariableField));
 
-    ScratchVariable * Variable = std::get<ScratchVariable *>(Field.Field);
+    ScratchVariable * Variable = std::get<ScratchVariable *>(Field.Value);
     BoxedValue Data = Block.GetInputData(0);
     Variable->SetData(Data);
     return ScratchStatus::SCRATCH_NEXT;
@@ -101,7 +101,7 @@ static ScratchStatus __hot Data_ChangeVariableBy(ScratchBlock & Block) {
 
     TachyonAssert(Field.IsType(FieldType::VariableField));
 
-    ScratchVariable * Variable = std::get<ScratchVariable *>(Field.Field);
+    ScratchVariable * Variable = std::get<ScratchVariable *>(Field.Value);
 
     BoxedValue Num = Block.GetInputData(0);
     BoxedValue Data = Variable->GetData();

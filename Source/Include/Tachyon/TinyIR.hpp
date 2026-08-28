@@ -1,66 +1,63 @@
 #pragma once
 
+#include <unordered_map>
+#include <optional>
+#include <vector>
+#include <bit>
+
 #include <Scratch/Blocks.hpp>
 #include <Scratch/Procedures.hpp>
-#include <vector>
+#include <Lib/NanBox.hpp>
 
 using namespace Scratch;
 
 namespace TinyIR {
     class IRValue {
         private:
-            NanBox::BoxedValue Value;
+            std::vector<NanBox::BoxedValue> Values = {};
         public:
-            size_t FirstUse;
-            size_t LastUse;
+            /* liveness range */
+            size_t FirstUsed;
+            size_t LastUsed;
+            std::optional<size_t> ParameterNum = std::nullopt;
+            /* register allocation */
+            size_t AllocatorId;
+            bool StackSpilled;
+            bool TempPushed;
 
-            explicit constexpr IRValue(NanBox::BoxedValue NotOurs) : Value(NotOurs) {}
-            /* copy constructor */
-            constexpr IRValue(const IRValue & Other) : FirstUse(Other.FirstUse), LastUse(Other.LastUse), Value(Other.Value) {}
-            /* copy assignment constructor */
-            constexpr IRValue & operator = (const IRValue & Other) {
-                if (&Other == this) {
-                    return *this;
-                }
-                this->FirstUse = Other.FirstUse;
-                this->LastUse = Other.LastUse;
-                this->Value = Other.Value;
-                return *this;
-            }
-            /* move constructor */
-            constexpr IRValue(IRValue && Other) : FirstUse(Other.FirstUse), LastUse(Other.LastUse), Value(Other.Value) {
-                Other.FirstUse = 0;
-                Other.LastUse = 0;
-                Other.Value = 0;
-            }
-            /* move assignment constructor */
-            constexpr IRValue & operator = (IRValue && Other) {
-                if (&Other == this) {
-                    return *this;
-                }
-                this->FirstUse = Other.FirstUse;
-                this->LastUse = Other.LastUse;
-                this->Value = Other.Value;
-
-                Other.FirstUse = 0;
-                Other.LastUse = 0;
-                Other.Value = 0;
-
-                return *this;
+            /**
+             * no value
+             */
+            explicit constexpr IRValue() {
+                this->Values.reserve(16);
             }
 
-            constexpr bool operator == (const NanBox::BoxedValue & Other) const {
-                return (this->Value == Other);
+            explicit constexpr IRValue(const NanBox::BoxedValue Value) {
+                this->Values.reserve(16);
+                this->Write(Value);
             }
 
-            constexpr bool operator != (const NanBox::BoxedValue & Other) const {
-                return (this->Value != Other);
+            inline void Write(const NanBox::BoxedValue NewValue) {
+                this->Values.insert(this->Values.begin() + this->Values.size(), NewValue);
+            }
+
+            constexpr size_t GetValueCursor(void) const {
+                return this->Values.size();
+            }
+
+            constexpr NanBox::BoxedValue GetValue(void) const {
+                return this->Values.back();
+            }
+
+            constexpr auto & GetValues(void) {
+                return this->Values;
             }
     };
 
     enum IROpcodeType : uint8_t {
         /* misc. */
         NOP,    // no operation
+        LPARAM, // link parameter
         /* data ops */
         SET,    // set value
         LOAD,   // load value
@@ -80,6 +77,8 @@ namespace TinyIR {
         /* flow control */
         JMP,    // jump to block
         CALL,   // call procedure
+        RCALL,  // call runtime procedure
+        RCALLV, // call runtime procedure (with return value)
         RET,    // return from procedure
         /* runtime one-time ops */
         START,  // emit runtime prologue
@@ -89,16 +88,27 @@ namespace TinyIR {
         LEAVE,  // emit function epilogue
     };
 
+    enum IRRCallType : uint8_t {
+        INVALID,
+        LOOKS_SAY,
+    };
+
     class IROpcode {
         private:
-            std::vector<IRValue> Inputs;
-            IROpcodeType Type;
+            std::vector<size_t> Inputs;
+            const IROpcodeType Type;
+            const std::optional<IRRCallType> RCallType  = std::nullopt; 
         public:
-            ScratchBlock * const Block;
+            ScratchBlock * const Block = nullptr;
             ScratchProcedure * const Procedure = nullptr;
             std::array<ScratchBlock *, 2> BlockLinks = { nullptr, nullptr };
             explicit constexpr IROpcode(ScratchBlock * const SomeBlock, IROpcodeType Type) : Block(SomeBlock), Type(Type) {}
             explicit constexpr IROpcode(ScratchBlock * const SomeBlock, IROpcodeType Type, ScratchProcedure * const ConnectedProcedure) : Block(SomeBlock), Type(Type), Procedure(ConnectedProcedure) {}
+            explicit constexpr IROpcode(ScratchBlock * const SomeBlock, IROpcodeType Type, IRRCallType RCallType) : Block(SomeBlock), Type(Type), RCallType(RCallType) {}
+
+            constexpr IRRCallType GetRCallType(void) const {
+                return this->RCallType.value_or(IRRCallType::INVALID);
+            }
 
             constexpr IROpcodeType GetType(void) const {
                 return this->Type;
@@ -108,23 +118,103 @@ namespace TinyIR {
                 return this->Inputs.size();
             }
 
-            constexpr void PushValue(size_t Position, IRValue & IRValue) {
-                this->Inputs.emplace(this->Inputs.begin() + Position, std::move(IRValue));
+            constexpr const auto & GetInputs(void) const {
+                return this->Inputs;
+            }
+
+            constexpr void PushValue(const size_t AssignmentNum) {
+                this->Inputs.insert(this->Inputs.begin() + this->Inputs.size(), AssignmentNum);
             }
     };
 
     using IRStack = std::vector<TinyIR::IROpcode>;
+    using IRValueLocator = std::pair<size_t, IRValue *>;
 
     class IRGenerator {
         private:
             IRStack BlockStack;
+
+            std::unordered_map<void *, IRValueLocator> DataBinds; // 1st = data pointer, 2nd = ir value pointer
+            std::unordered_map<std::string, size_t> ParameterBinds;
+            std::vector<IRValue> Variables;
+
             size_t BlockCounter;
 
-            void DescendInputs(IROpcode & Opcode);
-            IROpcode GenerateOpcode(ScratchBlock * const Block);
+            size_t TotalParams = 0;
+            bool ProcedureContext = false;
 
-            void PrintIR(void);
+            void DescendInputs(IROpcode & Opcode);
+
+            inline size_t AssignValue(const NanBox::BoxedValue Boxed) {
+                IRValue Value(Boxed);
+
+                Value.FirstUsed = this->BlockCounter;
+                Value.LastUsed = Value.FirstUsed;
+
+                DebugInfo("v%d = 0x%016zx\n", this->Variables.size(), Boxed);
+                this->Variables.insert(this->Variables.begin() + this->Variables.size(), Value);
+                return this->Variables.size() - 1;
+            }
+
+            inline size_t AssignReference(const size_t Reference) {
+                IRValue & Value = this->GetVariable(Reference);
+
+                Value.LastUsed = this->BlockCounter;
+
+                DebugInfo("v%d = v%d\n", this->Variables.size(), Reference);
+                this->Variables.insert(this->Variables.begin() + this->Variables.size(), Value);
+                return this->Variables.size() - 1;
+            }
+
+            inline size_t AssignParameter(void) {
+                IRValue Value;
+                Value.ParameterNum = this->TotalParams;
+                Value.LastUsed = this->BlockCounter;
+
+                DebugInfo("register p%d (pseudo-opcode)\n", this->TotalParams++);
+
+                this->Variables.insert(this->Variables.begin() + this->Variables.size(), Value);
+                return this->Variables.size() - 1;
+            }
+
+            void BindProcedureParameters(ScratchBlock & ProcedureDefinition);
+
+            IROpcode GenerateOpcode(ScratchBlock * const Block);
         public:
+            template <typename T>
+            inline void BindData(T * DataPtr, size_t VariableNum) {
+                IRValue & Value = this->GetVariable(VariableNum);
+                DebugInfo("bind %c%d, 0x%p (pseudo-opcode)\n", Value.ParameterNum.has_value() ? 'p' : 'v', VariableNum, DataPtr);
+                this->DataBinds.emplace(std::bit_cast<void *>(DataPtr), std::make_pair(VariableNum, &Value));
+            }
+
+            constexpr auto & GetDataBinds(void) {
+                return this->DataBinds;
+            }
+
+            [[nodiscard]]
+            constexpr IRValue & GetVariable(size_t VariableNum) {
+                TachyonAssert(VariableNum <= this->Variables.size());
+                return this->Variables[VariableNum];
+            }
+
+            constexpr NanBox::BoxedValue GetVariableData(size_t VariableNum) {
+                TachyonAssert(VariableNum <= this->Variables.size());
+                return this->Variables[VariableNum].GetValue();
+            }
+
+            constexpr auto & GetVariables(void) {
+                return this->Variables;
+            }
+
+            constexpr const auto & GetVariables(void) const {
+                return this->Variables;
+            }
+
+            constexpr bool IsProcedureContext(void) const {
+                return this->ProcedureContext;
+            }
+            
             [[nodiscard]]
             const IRStack & GenerateIR(ScratchBlock & Hat);
     };

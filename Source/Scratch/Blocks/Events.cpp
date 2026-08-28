@@ -33,7 +33,7 @@ static ScratchStatus EventBroadcast(ScratchBlock & Block) {
             if (Field.IsType(FieldType::BroadcastOption) == false) {
                 continue;
             }
-            const std::string BroadcastFieldKey = std::get<std::string>(Field.Field);
+            const std::string BroadcastFieldKey = std::get<std::string>(Field.Value);
             if (BroadcastInputKey == BroadcastFieldKey) {
                 std::string NextBroadcastKey = BroadcastBlock.GetKey();
                 if (NextBroadcastKey.empty() == true) {

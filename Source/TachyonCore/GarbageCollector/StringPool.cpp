@@ -5,6 +5,10 @@ using namespace Tachyon;
 
 static std::vector<std::string> StringPool;
 
+size_t GarbageCollector::GetNumStrings(void) {
+    return StringPool.size();
+}
+
 uint32_t GarbageCollector::AddToStringPool(const std::string & String) {
     StringPool.emplace_back(String);
     return static_cast<uint32_t>(StringPool.size() - 1);

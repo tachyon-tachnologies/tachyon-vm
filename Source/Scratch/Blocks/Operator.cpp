@@ -42,7 +42,7 @@ static BoxedValue __hot Operator_MathOp(ScratchBlock & Block) {
 
     TachyonAssert(Field.IsType(FieldType::StringField));
 
-    const std::string Operation = std::get<std::string>(Field.Field);
+    const std::string Operation = std::get<std::string>(Field.Value);
 
     if (Operation == "floor") {
         BoxedValue Data = Block.GetInputData(0);

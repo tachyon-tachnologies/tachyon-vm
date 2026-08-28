@@ -99,6 +99,7 @@ void Tachyon::InitializeScheduler(ScratchProject & Project) {
     if ((Tachyon::GetConfigVM() & TACHYON_CFG_PBLOCK) == false) {
         DebugWarn("Pseudo-blocks are disabled. This isn't a problem for projects that don't support Tachyon, but for those that do, you may notice a drop in performance and memory efficiency.\n");
     }
+    DebugInfo("String pool size: %d\n", GarbageCollector::GetNumStrings());
 }
 
 void __hot Tachyon::ScriptAddReadyQueue(ScratchScript & Script) {
@@ -125,9 +126,9 @@ bool __hot Tachyon::Step(void) {
         return true;
     }
     ScratchStatus Status = ScratchStatus::SCRATCH_NEXT;
-    OutputCodeInfo & CodeInfo = CurrentScript->JITState.CodeInfo;
+    Tachyon::OutputCodeInfo & CodeInfo = CurrentScript->JITState.CodeInfo;
     if (CodeInfo.CodeEntry == nullptr) {
-        DebugInfo("Script is not yet compiled. Compiling...\n");
+        // DebugInfo("Script is not yet compiled. Compiling...\n");
         CurrentScript->JITState.CodeInfo = Tachyon::Compile(*CurrentScript, CurrentScript->FirstBlockId);
         return false;
     } else {

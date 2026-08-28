@@ -42,7 +42,7 @@ namespace Scratch {
             std::string CurrentBlockId;
             ScratchSprite * Sprite;
             ScratchStatus CurrentStatus;
-            Tachyon_JITState JITState = {};
+            Tachyon_JITState JITState;
             uint8_t ControlFlags;
 
             inline void __hot SetControlFlag(const uint8_t Flag) {

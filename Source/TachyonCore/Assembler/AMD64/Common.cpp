@@ -10,6 +10,16 @@ using namespace NanBox;
     Commonly used functions
 */
 
+void __hot Tachyon_AssemblerAMD64::EmitFunctionPrologue(void) {
+    this->Push(GpReg(GpReg::RBP));
+    this->Mov(GpReg(GpReg::RBP), GpReg(GpReg::RSP));
+}
+
+void __hot Tachyon_AssemblerAMD64::EmitFunctionEpilogue(void) {
+    this->Leave();
+    this->Ret();
+}
+
 void __hot Tachyon_AssemblerAMD64::EmitMainPrologue(Tachyon_JITState & State) {
     /*
         little stack representation after CALL :)

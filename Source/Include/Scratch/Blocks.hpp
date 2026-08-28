@@ -77,6 +77,7 @@ namespace Scratch {
                 this->ProcedureDefinition = (this->Opcode == "procedures_definition");
                 this->ProcedurePrototype = (this->Opcode == "procedures_prototype");
                 this->ProcedureCall = (this->Opcode == "procedures_call");
+                this->GreenFlag = (this->Opcode == "event_whenflagclicked");
 
                 /*
                     next
@@ -184,6 +185,14 @@ namespace Scratch {
             constexpr const std::string & __hot GetKey(void) const {
                 return this->BlockKey;
             }
+            
+            /**
+             * Checks if the block is a green flag block.
+             * @return True if it is a green flag block, false if otherwise.
+             */
+            constexpr bool IsGreenFlag(void) const {
+                return this->GreenFlag;
+            }
 
             /**
              * Checks if the block is a procedure definition.
@@ -261,8 +270,16 @@ namespace Scratch {
              * Gets all the inputs in the block.
              * @returns A vector containing all the block's inputs
              */
-            constexpr auto GetAllInputs(void) {
+            constexpr auto & GetAllInputs(void) {
                 return this->Inputs;
+            }
+
+            /**
+             * Gets all the fields in the block.
+             * @returns A vector containing all the block's fields
+             */
+            constexpr auto & GetAllFields(void) {
+                return this->Fields;
             }
 
             /**
@@ -306,6 +323,8 @@ namespace Scratch {
 
             bool Shadow;
             bool TopLevel;
+
+            bool GreenFlag;
             bool ProcedureDefinition;
             bool ProcedurePrototype;
             bool ProcedureCall;

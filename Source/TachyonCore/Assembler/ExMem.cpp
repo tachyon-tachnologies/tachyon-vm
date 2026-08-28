@@ -1,10 +1,11 @@
 #include <Tachyon/ExMem.hpp>
 #include <Tachyon/Debug.hpp>
 #include <Common.hpp>
-#include <stddef.h>
+#include <iostream>
+#include <cstdint>
 
 #if (defined(_WIN32) || defined(_WIN64))
-#include <Windows.h>
+#include <memoryapi.h>
 #else
 #include <sys/mman.h>
 #endif
@@ -34,6 +35,13 @@ void Tachyon::FreeStack(void * Base) {
 [[nodiscard]]
 void * Tachyon::AllocateJITMemory(const size_t Size) {
 #if (defined(_WIN32) || defined(_WIN64))
+	MEM_EXTENDED_PARAMETER ExtParams;
+	MEM_ADDRESS_REQUIREMENTS Requirements;
+
+	/* system granularity */
+	Requirements.Alignment = 0;
+	static constexpr uint32_t Limit = 0x7FFFFFFF;
+	// Requirements.LowestStartingAddress = ();
 	return VirtualAlloc(nullptr, Size, (MEM_RESERVE | MEM_COMMIT), PAGE_READWRITE);
 #else
 	void * Addr = mmap(nullptr, Size, (PROT_WRITE | PROT_READ), (MAP_PRIVATE | MAP_ANON), -1, 0);

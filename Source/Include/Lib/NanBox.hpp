@@ -47,11 +47,13 @@ namespace NanBox {
     }
 
     static constexpr bool __hot  IsString(BoxedValue Boxed) {
-        return ((Boxed & NANBOX_STRING_MASK) != NANBOX_STRING_MASK);
+        return ((Boxed & NANBOX_STRING_MASK) == NANBOX_STRING_MASK);
     }
 
     static constexpr bool __hot IsBoolean(BoxedValue Boxed) {
-        return (((Boxed & NANBOX_NORMAL_MASK) == NANBOX_NORMAL_MASK) && (Boxed & (1 << 1)));
+        return (((Boxed & NANBOX_NORMAL_MASK) == NANBOX_NORMAL_MASK) &&
+                ((Boxed & NANBOX_STRING_MASK) != NANBOX_STRING_MASK) &&
+                (Boxed & (1 << 1)));
     }
 
     template <typename Type>

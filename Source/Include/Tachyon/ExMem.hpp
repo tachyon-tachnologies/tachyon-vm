@@ -56,4 +56,25 @@ namespace Tachyon {
 		__builtin___clear_cache((char *)Base, (char *)Base + Size);
 #endif
 	}
+
+	using OutputCode = int (*)(void);
+
+	struct OutputCodeInfo {
+		/**
+		 * JIT entry point
+		 */
+		OutputCode CodeEntry;
+
+		/**
+		 * JIT allocated code size
+		 */
+		size_t CodeSize;
+
+		inline void FreeMemory(void) {
+			if (likely(this->CodeEntry)) {
+				Tachyon::FreeJITMemory(reinterpret_cast<void *>(this->CodeEntry), this->CodeSize);
+				this->CodeEntry = nullptr;
+			}
+		}
+	};
 };

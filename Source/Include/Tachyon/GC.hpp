@@ -6,6 +6,11 @@
 namespace Tachyon {
     namespace GarbageCollector {
         /**
+         * @returns The total number of strings in the string pool
+         */
+        size_t GetNumStrings(void);
+
+        /**
          * Adds a string to the garbage collector's string pool
          * @param String The string to add into the string pool
          * @returns An ID that points to the string in the string pool

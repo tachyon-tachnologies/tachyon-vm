@@ -17,27 +17,6 @@
 #error "Only x86 systems are supported!!"
 #endif
 
-using OutputCode = int (*)(void);
-
-struct OutputCodeInfo {
-    /**
-     * JIT entry point
-     */
-    OutputCode CodeEntry;
-
-    /**
-     * JIT allocated code size
-     */
-    size_t CodeSize;
-
-    inline void FreeMemory(void) {
-        if (likely(this->CodeEntry)) {
-            Tachyon::FreeJITMemory(reinterpret_cast<void *>(this->CodeEntry), this->CodeSize);
-            this->CodeEntry = nullptr;
-        }
-    }
-};
-
 struct AMD64_Registers {
     uint64_t rbx, rsp, rbp;
     uint64_t r12, r13, r14, r15;
@@ -47,17 +26,17 @@ struct Tachyon_JITState {
     /**
      * Info contaning entry point and code size
      */
-    OutputCodeInfo CodeInfo;
+    Tachyon::OutputCodeInfo CodeInfo;
 
     /**
      * Only used when the Tachyon debugger is enabled
      */
-    std::unordered_map<std::string, uintptr_t> BlockMap;
+    std::unordered_map<std::string, void *> BlockMap;
     
     /**
      * CPU register state
      */
-    AMD64_Registers Registers;
+    AMD64_Registers Registers;    
 };
 
 class Label {
@@ -147,9 +126,9 @@ class Tachyon_AssemblerBase {
          * @return A struct containing the generated code, and the code size (in that order).
          */
         [[nodiscard]]
-        inline OutputCodeInfo Commit(void) {
+        inline Tachyon::OutputCodeInfo Commit(void) {
             TachyonAssert(Tachyon::ProtectJITMemory(this->CodeBase, this->CodeSize) == true);
-            OutputCode Entry = reinterpret_cast<OutputCode>(this->CodeBase);
+            Tachyon::OutputCode Entry = reinterpret_cast<Tachyon::OutputCode>(this->CodeBase);
             this->CodeDump();
             return {Entry, this->CodeSize};
         }
@@ -189,6 +168,12 @@ class GpReg {
         };
 
         GpReg() = default;
+
+        explicit constexpr GpReg(const size_t IdValue) {
+            this->Value = GpReg::RegisterKind(GpReg::RegisterKind::RAX + (IdValue & 0b111));
+            this->RegId = (IdValue & 0b111);
+        }
+        
         constexpr GpReg(const GpReg::RegisterKind Reg) : Value(Reg) {
             /* cache regid */
             switch (this->Value) {
@@ -738,6 +723,9 @@ class Tachyon_AssemblerAMD64 : public Tachyon_AssemblerBase {
 
         void EmitMainPrologue(Tachyon_JITState & State);
         void EmitMainEpilogue(void);
+
+        void EmitFunctionPrologue(void);
+        void EmitFunctionEpilogue(void);
         
         /*
             Arithmetic
@@ -753,6 +741,8 @@ class Tachyon_AssemblerAMD64 : public Tachyon_AssemblerBase {
         void Mov(const GpReg & Dest, const uint32_t Imm);
         void Mov(const GpReg & Dest, const uint64_t Imm);
 
+        void Mov(const GpReg & Dest, const GpReg & Src);
+
         void Mov(const Mem & Dest, const GpReg & Src);
 
         void Push(const GpReg & Register);
@@ -764,10 +754,21 @@ class Tachyon_AssemblerAMD64 : public Tachyon_AssemblerBase {
         void RelCall(const int32_t Disp32);
         void RelCall(const int16_t Disp16);
         void CallFunction(const void * const FunctionPtr);
-        void IndirectCall(const GpReg & Register);
+        void IndirectMemoryCall(const GpReg & Register);
+        void IndirectRegisterCall(const GpReg & Register);
 
         void Ret(void);
         void Ret(const uint16_t Bytes);
+
+        /**
+         * Misc.
+         */
+        void Leave(void) {
+            this->Write8(0xC9);
+        }
+        void Nop(void) {
+            this->Write8(0x90);
+        }
 };
 
 #if defined(__x86_64__)

@@ -171,6 +171,7 @@ namespace Scratch {
                 if (unlikely(GreenFlagItem != this->GreenFlags.end())) {
                     return GreenFlagItem->second.get();
                 }
+                DebugWarn("Block ID \"%s\" was not found\n", Id.c_str());
                 return nullptr;
             }
 
@@ -314,19 +315,14 @@ namespace Scratch {
 
                     std::unique_ptr<ScratchBlock> Block = std::make_unique<ScratchBlock>(BlockKey, BlockObject, *this);
 
-                    /* sort */
-                    if (Block->GetOpcode() == "event_whenflagclicked") {
-                        this->GreenFlags.insert({
-                            BlockIdU64,
-                            std::move(Block)
-                        });
+                    if (Block->IsGreenFlag()) {
+                        this->GreenFlags.insert({ BlockIdU64, std::move(Block) });
                     } else if (Block->GetOpcode() == "event_whenbroadcastreceived") {
-                        this->BroadcastReceivers.insert({
-                            BlockIdU64,
-                            std::move(Block)
-                        });
+                        this->BroadcastReceivers.insert({ BlockIdU64, std::move(Block) });
+                    } else if (Block->IsProcedureDef()) {
+                        this->ProcedureDefinitions.insert({ BlockIdU64, std::move(Block) });
                     } else {
-                        Block->IsProcedureDef() ? this->ProcedureDefinitions.insert({ BlockIdU64, std::move(Block) }) : this->Blocks.insert({ BlockIdU64, std::move(Block) });
+                        this->Blocks.insert({ BlockIdU64, std::move(Block) });
                     }
                 }
                 /* all blocks loaded. no missing dependencies to worry about */

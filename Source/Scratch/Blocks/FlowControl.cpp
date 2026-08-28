@@ -92,7 +92,7 @@ static ScratchStatus __hot ControlFlow_Stop(ScratchBlock & Block) {
     
     TachyonAssert(StopOption.IsType(FieldType::StringField));
 
-    std::string Option(std::get<std::string>(StopOption.Field));
+    std::string Option(std::get<std::string>(StopOption.Value));
     if (Option == "this script") {
         return ScratchStatus::SCRATCH_END;
     } else if (Option == "other scripts in sprite") {

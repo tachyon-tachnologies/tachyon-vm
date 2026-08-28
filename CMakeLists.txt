@@ -29,6 +29,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -fno-exceptions
     -march=native
     -freflection
+    -D_WIN32_WINNT=0x0A00
+    -g
 )
 
 # SDl3

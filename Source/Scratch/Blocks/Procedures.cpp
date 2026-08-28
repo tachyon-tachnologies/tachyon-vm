@@ -3,7 +3,6 @@
 #include <Tachyon/Scheduler.hpp>
 #include <Tachyon/Assembler.hpp>
 #include <Tachyon/Compiler.hpp>
-#include <Tachyon/RegAlloc.hpp>
 #include <Scratch/BlockFields.hpp>
 #include <Scratch/Procedures.hpp>
 #include <Scratch/Blocks.hpp>

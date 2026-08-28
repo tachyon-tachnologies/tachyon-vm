@@ -9,7 +9,7 @@
 using namespace simdjson;
 using namespace Scratch;
 
-void __hot ScratchSprite::CachePointers(void) {
+void ScratchSprite::CachePointers(void) {
     auto Cache = [this](auto & Map) {   
         for(auto & Item : Map) {
             ScratchBlock * GreenFlagBlock = Item.second.get();
@@ -22,6 +22,17 @@ void __hot ScratchSprite::CachePointers(void) {
                 if (LastBlock) {
                     LastBlock->NextBlock_Pointer = Block;
                 }
+                
+                auto & Inputs = Block->GetAllInputs();
+                for(ScratchInput & Input : Inputs) {
+                    if (Input.IsReporter() == false) {
+                        continue;
+                    }
+                    const std::string & ReporterId = std::get<std::string>(Input.Input);
+                    Input.ReporterBlock = this->GetBlockFromId(ReporterId);
+                    break;
+                }
+
                 LastBlock = Block;
                 Block = this->GetBlockFromId(Block->GetNextKey());
             }

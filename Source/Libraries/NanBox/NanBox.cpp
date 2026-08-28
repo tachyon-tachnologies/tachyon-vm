@@ -12,11 +12,13 @@ using namespace NanBox;
 
 BoxedValue __hot NanBox::Box(double Number) {
     BoxedValue Boxed = std::bit_cast<BoxedValue>(Number);
+    // DebugInfo("%0.0f -> 0x%016zx...\n", Number, Boxed);
     return Boxed;
 }
 
 BoxedValue __hot NanBox::Box(bool Boolean) {
-    BoxedValue Boxed = (NANBOX_NORMAL_MASK | static_cast<uint64_t>(Boolean)); 
+    BoxedValue Boxed = Boolean ? NANBOX_TRUE : NANBOX_FALSE;
+    // DebugInfo("%s -> 0x%016zx...\n", Boolean ? "true" : "false", Boxed);
     return Boxed;
 }
 

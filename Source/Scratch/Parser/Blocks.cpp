@@ -21,7 +21,7 @@ BoxedValue __hot ScratchBlock::GetInputData(size_t InputNum) {
     if (Input.IsReporter() == true) {
         /* get it from the connected block instead */
         ScratchSprite & OwnerSprite = this->Sprite.get();
-        ScratchBlock * Reporter = Input.GetReporterBlock();
+        ScratchBlock * Reporter = Input.ReporterBlock;
 
         TachyonAssert(Reporter != nullptr);
 
@@ -284,7 +284,7 @@ void ScratchInput::ParseValueInput(ScratchSprite & Owner, ondemand::array & Inpu
         case ScratchShadow::INPUT_SAME_BLOCK_SHADOW: {
             InputObject.reset();
 
-            simdjson::simdjson_result Result = InputObject.at(1);
+            auto Result = InputObject.at(1);
             TachyonAssert(Result.error() == error_code::SUCCESS);
 
             bool IsString;
@@ -299,7 +299,7 @@ void ScratchInput::ParseValueInput(ScratchSprite & Owner, ondemand::array & Inpu
 
                 InputObject.reset();
 
-                this->ReporterBlock = Owner.GetBlockFromId(ReporterKeyString);
+                // this->ReporterBlock = Owner.GetBlockFromId(ReporterKeyString);
                 this->Input = ReporterKeyString;
                 this->Reporter = true;
 
@@ -328,7 +328,7 @@ void ScratchInput::ParseValueInput(ScratchSprite & Owner, ondemand::array & Inpu
             TachyonAssert(Result.get_string().get(ReporterId) == error_code::SUCCESS);
             
             this->Input = ReporterId;
-            this->ReporterBlock = Owner.GetBlockFromId(ReporterId);
+            // this->ReporterBlock = Owner.GetBlockFromId(ReporterId);
             break;
         }
         case ScratchShadow::INPUT_DIFF_BLOCK_SHADOW: {
@@ -350,23 +350,8 @@ void ScratchInput::ParseValueInput(ScratchSprite & Owner, ondemand::array & Inpu
 
                 InputObject.reset();
 
-                Result = InputObject.at(2);
-                TachyonAssert(Result.error() == error_code::SUCCESS);
-                TachyonAssert(Result.is_string().get(IsString) == error_code::SUCCESS);
-
-                if (IsString == false) {
-                    TachyonAssert(Result.get_array().get(ValueArray) == error_code::SUCCESS);
-                    InputObject.reset();
-
-                    /* these always have a reporter */
-                    this->ReporterBlock = Owner.GetBlockFromId(ReporterKeyString);
-                    this->Input = SetupInputValue(Owner, ValueArray);
-                    this->Reporter = true;
-
-                    InputObject.reset();
-                    break;
-                }
-                /* can be safely ignored */
+                this->Input = ReporterKeyString;
+                this->Reporter = true;
                 break;
             }
             /* variable, list, or broadcast */
@@ -462,7 +447,7 @@ void ScratchField::ParseBroadcastField(ondemand::array & FieldObject) {
     std::string BroadcastOption;
     TachyonAssert(Result.get_string().get(BroadcastOption) == error_code::SUCCESS);
 
-    this->Field = BroadcastOption;
+    this->Value = BroadcastOption;
 
     FieldObject.reset();
 }
@@ -476,7 +461,7 @@ void ScratchField::ParseStringOption(ondemand::array & FieldObject) {
     std::string StringOption;
     TachyonAssert(Result.get_string().get(StringOption) == error_code::SUCCESS);
 
-    this->Field = StringOption;
+    this->Value = StringOption;
 
     FieldObject.reset();
 }
@@ -491,10 +476,10 @@ void ScratchField::ParseDataField(ondemand::array & FieldObject, ScratchBlock & 
 
     ScratchSprite & Owner = Block.GetOwnerSprite();
     if (ScratchList * List = Owner.GetListFromKey(VariableKey)) {
-        this->Field = List;
+        this->Value = List;
         return;
     } else if (ScratchVariable * Variable = Owner.GetVariableFromKey(VariableKey)) {
-        this->Field = Variable;
+        this->Value = Variable;
         return;
     }
     TachyonAbort("Invalid data key: \"%s\"\n", VariableKey.data());

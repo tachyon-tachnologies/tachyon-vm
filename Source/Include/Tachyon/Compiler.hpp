@@ -6,6 +6,7 @@
 #include <Scratch/Common.hpp>
 #include <Scratch/Scripts.hpp>
 #include <Tachyon/Assembler.hpp>
+#include <Tachyon/TinyIR.hpp>
 #include <Lib/NanBox.hpp>
 #include <Common.hpp>
 

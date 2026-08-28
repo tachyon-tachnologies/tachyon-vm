@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Tachyon/Assembler.hpp>
+#include <Tachyon/ExMem.hpp>
 #include <vector>
 #include <string>
 
@@ -12,7 +12,7 @@ namespace Scratch {
         /**
          * Contains JIT data
          */
-        OutputCodeInfo JITData = {};
+        Tachyon::OutputCodeInfo JITData = {};
         
         /**
          * The name of the procedure to call
