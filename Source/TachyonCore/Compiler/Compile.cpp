@@ -124,7 +124,7 @@ static void __hot CompileIRBlock(TachyonAssembler & Asm, TinyIR::IRGenerator & I
 #if (defined(_WIN32) || defined(_WIN64))
                     Asm.Pop(GpReg(ABIRegisterOrder::RCX + i));
 #else
-                    Asm.Pop(GpReg(ABIRegisterOrder::RDI + i)
+                    Asm.Pop(GpReg(ABIRegisterOrder::RDI + i));
 #endif
                 }
                 i++;

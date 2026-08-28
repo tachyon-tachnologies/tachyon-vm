@@ -17,7 +17,7 @@ void Tachyon_AssemblerAMD64::CallFunction(const void * const FunctionPtr) {
     uint64_t CodeAddress = reinterpret_cast<uint64_t>(this->GetCodePointer());
     uint64_t Displacement64 = FuncAddress - (CodeAddress + 5);
 
-    TachyonAssertMsg(Displacement64 <= UINT32_MAX, "JIT call target is outside the 32-bit displacement range!!\n");
+    TachyonAssertMsg(Displacement64 <= UINT32_MAX, "JIT call target is outside the 32-bit displacement range!! Calculated value: 0x%016zx\n", Displacement64);
     
     int32_t Displacement = static_cast<int32_t>(Displacement64);
     this->RelCall(Displacement);

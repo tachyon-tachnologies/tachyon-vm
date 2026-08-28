@@ -1,8 +1,6 @@
 #include <Tachyon/ExMem.hpp>
 #include <Tachyon/Debug.hpp>
 #include <Common.hpp>
-#include <iostream>
-#include <cstdint>
 
 #if (defined(_WIN32) || defined(_WIN64))
 #include <memoryapi.h>
@@ -44,7 +42,7 @@ void * Tachyon::AllocateJITMemory(const size_t Size) {
 	// Requirements.LowestStartingAddress = ();
 	return VirtualAlloc(nullptr, Size, (MEM_RESERVE | MEM_COMMIT), PAGE_READWRITE);
 #else
-	void * Addr = mmap(nullptr, Size, (PROT_WRITE | PROT_READ), (MAP_PRIVATE | MAP_ANON), -1, 0);
+	void * Addr = mmap(nullptr, Size, (PROT_WRITE | PROT_READ), (MAP_PRIVATE | MAP_ANON | MAP_32BIT), -1, 0);
 	return (Addr == MAP_FAILED) ? nullptr : Addr;
 #endif
 }
