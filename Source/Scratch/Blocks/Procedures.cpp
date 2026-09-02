@@ -44,7 +44,7 @@ static ScratchStatus __hot i_ProceduresCall(ScratchBlock & Block) {
     ScratchSprite & Owner = Block.GetOwnerSprite();
     auto SearchResult = Owner.Procedures.find(Mutation.ProcCode);
     if (unlikely(SearchResult == Owner.Procedures.end())) {
-        DebugError("Error: Invalid procedure: %s\n", Mutation.ProcCode);
+        DebugError("Error: Invalid procedure: %s\n", Mutation.ProcCode.c_str());
         return ScratchStatus::SCRATCH_END;
     }
     ScratchProcedure & Procedure = SearchResult->second;

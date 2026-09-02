@@ -11,6 +11,16 @@ if(MSVC)
     message(FATAL_ERROR "Please use a compiler such as G++ or Clang++")
 endif()
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_UNITY_BUILD ON)
+
+find_program(CCACHE_PROGRAM ccache)
+
+if(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
+endif()
+
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -28,9 +38,11 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -fno-rtti
     -fno-exceptions
     -march=native
-    -freflection
     -D_WIN32_WINNT=0x0A00
-    -g
+)
+
+target_link_options(${PROJECT_NAME} PRIVATE
+    -ldl
 )
 
 # SDl3

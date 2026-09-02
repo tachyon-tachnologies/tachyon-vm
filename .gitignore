@@ -1,8 +1,8 @@
 # Build files
 build
-out
 # Visual Studio / Visual Studio Code
 .vs
 .vscode
 # AI coding agents
 AGENTS.md
+.agent.md

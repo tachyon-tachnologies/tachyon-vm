@@ -4,8 +4,9 @@ void LinearRegAllocator::Allocate(std::vector<TinyIR::IRValue> & Values) {
     size_t StackId = 0;
     RegisterState * LastState = nullptr;
     for(size_t i = 0; i < Values.size(); i++) {
-        auto & Value = Values.at(i);
         bool Allocated = false;
+
+        auto & Value = Values.at(i);
 
         for(auto & State : this->Registers) {
             if (likely(LastState != nullptr)) {
@@ -21,8 +22,6 @@ void LinearRegAllocator::Allocate(std::vector<TinyIR::IRValue> & Values) {
                 Allocated = true;
                 
                 LastState = &State;
-
-                // DebugInfo("v%d: assigned reg id %d\n", i, State.RegId);
                 break;
             }
             /* try the next register */

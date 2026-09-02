@@ -2,6 +2,7 @@
 #include <Tachyon/Compiler.hpp>
 #include <Tachyon/Scheduler.hpp>
 #include <Tachyon/LRA.hpp>
+#include <Tachyon/TinyIR.hpp>
 
 #include <Scratch/Looks.hpp>
 
@@ -10,32 +11,51 @@
 
 using namespace Scratch;
 
-static inline void __hot ABIPassParameter(size_t i, TinyIR::IRValue & Value, TachyonAssembler & Asm) {
-    if (Value.StackSpilled == false && Value.AllocatorId <= ABIRegisterOrder::R9) {
-        GpReg AllocatedRegister(Value.AllocatorId);
+static constexpr size_t MAX_ABI_REGISTER = ABIRegisterOrder::R9;
+
+/* NOTE: this is x86-specific for now */
+static constexpr size_t GetParamRegisterBase(void) {
 #if (defined(_WIN32) || defined(_WIN64))
-        GpReg ParamRegister(static_cast<size_t>(ABIRegisterOrder::RCX + i));
-        if (Value.AllocatorId != ABIRegisterOrder::RCX + i) {
-            Asm.Push(ParamRegister);
-            Asm.Mov(ParamRegister, Value.GetValue());
-            Value.TempPushed = true;
-            return;
-        }
+    return static_cast<size_t>(ABIRegisterOrder::RCX);
 #else
-        GpReg ParamRegister(static_cast<size_t>(ABIRegisterOrder::RDI + i));
-        if (Value.AllocatorId != ABIRegisterOrder::RDI + i) {
-            Asm.Push(ParamRegister);
-            Asm.Mov(ParamRegister, Value.GetValue());
-            Value.TempPushed = true;
-            return;
-        }
+    return static_cast<size_t>(ABIRegisterOrder::RDI);
 #endif
-        Asm.Mov(AllocatedRegister, Value.GetValue());
-        Value.TempPushed = false;
+}
+
+static constexpr uint64_t GetVariableDataPointer(ScratchVariable * const Variable) {
+    return std::bit_cast<uint64_t>(&Variable->GetData());
+}
+
+static ScratchVariable * FindVariableFromDataBinds(const auto & Inputs, size_t InputIndex, const TinyIR::DataBindMap & DataBinds) {
+    auto Result = DataBinds.find(reinterpret_cast<void *>(Inputs[InputIndex]));
+    if (unlikely(Result == DataBinds.end())) {
+        return nullptr;
+    }
+    return reinterpret_cast<ScratchVariable *>(Result->first);
+}
+
+/* NOTE: again, this is x86-specific. when other architectures are added, i'll change this up */
+static inline void __hot ABIPassParameter(const size_t i, TinyIR::IRValue & Value, TachyonAssembler & Asm) {
+    if (Value.StackSpilled == true || Value.AllocatorId > MAX_ABI_REGISTER) {
+        // TODO: stack spilling
         return;
     }
-    /* spill to the stack */
-    return;
+    
+    GpReg AllocatedRegister(Value.AllocatorId);
+    const size_t ParamRegisterBase = GetParamRegisterBase();
+    const size_t ExpectedParamReg = ParamRegisterBase + i;
+    
+    if (Value.AllocatorId != ExpectedParamReg) {
+        GpReg ParamRegister(ExpectedParamReg);
+        /* caller-saved */
+        Asm.Push(ParamRegister);
+        Asm.Mov(ParamRegister, Value.GetValue());
+
+        Value.TempPushed = true;
+    } else {
+        Asm.Mov(AllocatedRegister, Value.GetValue());
+        Value.TempPushed = false;
+    }
 }
 
 static void __hot CompileIRBlock(TachyonAssembler & Asm, TinyIR::IRGenerator & IRGen, const TinyIR::IROpcode & IRBlock) {
@@ -55,79 +75,83 @@ static void __hot CompileIRBlock(TachyonAssembler & Asm, TinyIR::IRGenerator & I
             break;
         }
         case TinyIR::IROpcodeType::SET: {
-            // could generate something
+            TinyIR::DataBindMap & DataBinds = IRGen.GetDataBinds();
             auto & Inputs = IRBlock.GetInputs();
-            auto & DataBinds = IRGen.GetDataBinds();
-
             auto & VarInput = IRGen.GetVariable(Inputs[1]);
 
-            GpReg Register(VarInput.AllocatorId);
-
-            ScratchVariable * Variable = nullptr;
-            for(auto & Item : DataBinds) {
-                if (Inputs[1] == Item.second.first) {
-                    // ScratchVariable->Data pointer
-                    Variable = reinterpret_cast<ScratchVariable *>(Item.first);
-                    Asm.Mov(Register, std::bit_cast<uint64_t>(&Variable->GetData()));
-                    break;
-                }
-            }
+            ScratchVariable * Variable = FindVariableFromDataBinds(Inputs, 1, DataBinds);
             TachyonAssert(Variable != nullptr);
+            
+            GpReg Register(VarInput.AllocatorId);
+            Asm.Mov(Register, GetVariableDataPointer(Variable));
+            
             auto & ValueInput = IRGen.GetVariable(Inputs[0]);
             Asm.Mov(GpReg(ValueInput.AllocatorId), ValueInput.GetValue());
             Asm.Mov(Mem(Register), GpReg(ValueInput.AllocatorId));
             break;
         }
         case TinyIR::IROpcodeType::RCALL: {
-            /* ambiguous call to runtime */
             switch(IRBlock.GetRCallType()) {
                 case TinyIR::IRRCallType::INVALID: {
                     DebugError("Invalid runtime call!!\n");
                     break;
                 }
                 case TinyIR::IRRCallType::LOOKS_SAY: {
-                    Asm.Push(GpReg(GpReg::RAX));
-                    Asm.Mov(GpReg(GpReg::RAX), reinterpret_cast<uint64_t>(RuntimeSay));
-                    Asm.IndirectRegisterCall(GpReg(GpReg::RAX));
-                    // Asm.CallFunction(reinterpret_cast<void *>(RuntimeSay));
-                    Asm.Pop(GpReg(GpReg::RAX));
+                    /* 
+                     * Windows and Linux share an issue where allocations are not done near the runtime 
+                     * It's so easy to fix for Windows, but it is absolute HELL for Linux.
+                     *
+                     * /proc/self/maps parsing didn't help me at all.
+                     *
+                     * The Linux kernel devs seriously need to make a reimplementation of the mmap
+                     * syscall that is similar to VirtualAlloc2 on Windows systems.
+                     * */
+                    Asm.CallFunction(reinterpret_cast<void *>(RuntimeSay));
+                    // Asm.Push(GpReg(GpReg::RAX));
+                    // Asm.Mov(GpReg(GpReg::RAX), reinterpret_cast<uint64_t>(RuntimeSay));
+                    //
+                    // Asm.IndirectRegisterCall(GpReg(GpReg::RAX));
+                    //
+                    // Asm.Pop(GpReg(GpReg::RAX));
                     break;
                 }
                 default: {
-                    DebugError("Unhandled runtime call type\n");
+                    DebugError("Unhandled runtime call type!!\n");
                     break;
                 }
             }
             break;
         }
         case TinyIR::IROpcodeType::CALL: {
-            /* the first block link = procedure definition always */
             TachyonAssert(IRBlock.BlockLinks[0] != nullptr);
-            if (IRBlock.Procedure->JITData.CodeEntry == nullptr) {
-                IRBlock.Procedure->JITData = Tachyon::Compile(*Tachyon::GetCurrentScript(), IRBlock.BlockLinks[0]->GetKey());
+            
+            if (unlikely(IRBlock.Procedure->JITData.CodeEntry == nullptr)) {
+                /* uncompiled. compile it */
+                IRBlock.Procedure->JITData = Tachyon::Compile(
+                    *Tachyon::GetCurrentScript(),
+                    IRBlock.BlockLinks[0]->GetKey()
+                );
             }
-            /* TODO: handle parameters */
-            // DebugInfo("Compiler: function uses %d input(s)\n", IRBlock.GetNumInputs());
+            
             auto & Inputs = IRBlock.GetInputs();
-            size_t i = 0;
+            
+            size_t ParamIndex = 0;
             for(auto InputNum : Inputs) {
                 TinyIR::IRValue & Value = IRGen.GetVariable(InputNum);
-                // DebugInfo("allocator id: %d, spilled: %s, last used: %d-%d\n", Value.AllocatorId, Value.StackSpilled ? "true" : "false", Value.FirstUsed, Value.LastUsed);
-                ABIPassParameter(i++, Value, Asm);
+                ABIPassParameter(ParamIndex++, Value, Asm);
             }
-            Asm.CallFunction(reinterpret_cast<void *>(IRBlock.Procedure->JITData.CodeEntry));
-            /* this looks jank asf but it works */
-            i = 0;
+            
+            Asm.CallFunction(std::bit_cast<void *>(IRBlock.Procedure->JITData.CodeEntry));
+ 
+            /* TODO: make it in the ACTUAL correct order */
+            ParamIndex = 0;
+            const size_t ParamRegisterBase = GetParamRegisterBase();
             for(auto InputNum : Inputs) {
                 TinyIR::IRValue & Value = IRGen.GetVariable(InputNum);
                 if (Value.TempPushed) {
-#if (defined(_WIN32) || defined(_WIN64))
-                    Asm.Pop(GpReg(ABIRegisterOrder::RCX + i));
-#else
-                    Asm.Pop(GpReg(ABIRegisterOrder::RDI + i));
-#endif
+                    Asm.Pop(GpReg(ParamRegisterBase + ParamIndex));
                 }
-                i++;
+                ParamIndex++;
             }
             break;
         }
@@ -171,11 +195,6 @@ Tachyon::OutputCodeInfo __hot Tachyon::Compile(ScratchScript & Script, std::stri
 
     TachyonAssembler Asm;
     auto & Variables = IRGen.GetVariables();
-
-    // for(size_t i = 0; i < Variables.size(); i++) {
-    //     auto & Value = Variables.at(i);
-    //     DebugInfo("v%d: %d - %d\n", i, Value.FirstUsed, Value.LastUsed);
-    // }
 
     LinearRegAllocator RegAlloc;
     RegAlloc.Allocate(Variables);

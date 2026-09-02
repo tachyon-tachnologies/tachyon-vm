@@ -1,2 +1,0 @@
--I./Source/Include/
--std=c++26

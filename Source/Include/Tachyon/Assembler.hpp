@@ -3,6 +3,7 @@
 #include <Tachyon/Debug.hpp>
 #include <Tachyon/ExMem.hpp>
 #include <Lib/Hexdump.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -17,11 +18,6 @@
 #error "Only x86 systems are supported!!"
 #endif
 
-struct AMD64_Registers {
-    uint64_t rbx, rsp, rbp;
-    uint64_t r12, r13, r14, r15;
-};
-
 struct Tachyon_JITState {
     /**
      * Info contaning entry point and code size
@@ -32,11 +28,6 @@ struct Tachyon_JITState {
      * Only used when the Tachyon debugger is enabled
      */
     std::unordered_map<std::string, void *> BlockMap;
-    
-    /**
-     * CPU register state
-     */
-    AMD64_Registers Registers;    
 };
 
 class Label {
@@ -52,6 +43,7 @@ class Label {
 
 class Tachyon_AssemblerBase {
     private:
+        TachyonAllocator Allocator;
         std::vector<Label> LabelPool;
         uint32_t LabelIds = 0;
     protected:
@@ -85,12 +77,11 @@ class Tachyon_AssemblerBase {
         }
     public:
         Tachyon_AssemblerBase() {
-            this->CodeSize = 8192;
+            this->CodeSize = 1024;
             this->BytesWritten = 0;
             /* allocate jit code buffer */
-            this->CodeBase = Tachyon::AllocateJITMemory(this->CodeSize);
+            this->CodeBase = this->Allocator.Alloc(this->CodeSize);
             TachyonAssert(this->CodeBase != nullptr);
-
             this->CodePointer = static_cast<uint8_t *>(this->CodeBase);
         }
 

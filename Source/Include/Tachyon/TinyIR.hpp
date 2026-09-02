@@ -90,6 +90,13 @@ namespace TinyIR {
 
     enum IRRCallType : uint8_t {
         INVALID,
+        /* pseudo-blocks */
+        PSEUDO_TACHYON_LOG,
+
+        PSEUDO_TACHYON_XOR,
+        PSEUDO_TACHYON_OR,
+        PSEUDO_TACHYON_AND,
+        /* others */
         LOOKS_SAY,
     };
 
@@ -129,12 +136,13 @@ namespace TinyIR {
 
     using IRStack = std::vector<TinyIR::IROpcode>;
     using IRValueLocator = std::pair<size_t, IRValue *>;
+    using DataBindMap = std::unordered_map<void *, IRValueLocator>;
 
     class IRGenerator {
         private:
             IRStack BlockStack;
 
-            std::unordered_map<void *, IRValueLocator> DataBinds; // 1st = data pointer, 2nd = ir value pointer
+            DataBindMap DataBinds; // 1st = data pointer, 2nd = ir value pointer
             std::unordered_map<std::string, size_t> ParameterBinds;
             std::vector<IRValue> Variables;
 

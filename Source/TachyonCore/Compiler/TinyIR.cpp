@@ -89,7 +89,7 @@ IROpcode IRGenerator::GenerateOpcode(ScratchBlock * Block) {
             Value.LastUsed = this->BlockCounter;
 
             std::cout << ", ";
-            std::cout << (Value.ParameterNum.has_value() ? "v" : "p") << Assignment;
+            std::cout << (Value.ParameterNum.has_value() ? "p" : "v") << Assignment;
         }
         std::cout << std::endl;
         return Opcode;
