@@ -18,11 +18,8 @@ int main(int argc, char * argv[]) {
         std::cout << "Please give a sb3 project to run." << std::endl;
         return -1;
     }
-    /* read /proc/self/maps early */
-    if (Tachyon::ReadProcMaps() == false) {
-        std::cout << "Could not find a sufficient JIT code buffer range. Are you low on memory?" << std::endl;
-        return -1;
-    }
+
+    TachyonAllocator::Init();
 
     /* verify that the project exists, and parse the project */
     Scratch::ScratchProject MainProject = Scratch::ScratchProject(argv[1]);

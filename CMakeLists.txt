@@ -41,10 +41,6 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     -D_WIN32_WINNT=0x0A00
 )
 
-target_link_options(${PROJECT_NAME} PRIVATE
-    -ldl
-)
-
 # SDl3
 find_package(SDL3 CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)

@@ -2,46 +2,26 @@
 
 #if (defined(_WIN32) || defined(_WIN64))
 #include <Windows.h>
+#else
+#include <unistd.h>
 #endif
+
 #include <Tachyon/Debug.hpp>
 
-#include <unistd.h>
 #include <stddef.h>
 #include <cstdint>
 #include <bit>
 
-class TachyonAllocator {
-    private:
-        uint64_t MinAddress = 0;
-        uint64_t MaxAddress = 0;
-        void * Hint = nullptr;
+namespace TachyonAllocator {
+	void SetAllocationRange(const void * const Ptr);
 
-        size_t PageSize;
+	[[nodiscard]]
+	void * Alloc(const size_t Size);
 
-        void SetAllocationRange(const void * const Ptr);
-        constexpr bool InsideAllocationRange(const void * const Ptr) {
-            const uint64_t Address = std::bit_cast<uint64_t>(Ptr);
-            return (Address >= this->MinAddress && Address <= this->MaxAddress);
-        }
-    public:
-        TachyonAllocator() {
-            this->PageSize = sysconf(_SC_PAGESIZE);
-        }
-        [[nodiscard]]
-        void * Alloc(const size_t Size);
+	void Init(void);
 };
 
 namespace Tachyon {
-    /**
-     * @returns Beginning of JIT buffer region
-     */
-    void * GetJITRegionStart(void);
-    /**
-     * Reads /proc/self/maps to determine where to place the JIT code buffer
-     * @returns True if successful, false if otherwise
-     */
-    bool ReadProcMaps(void);
-
 	/**
 	 * Allocates JIT memory with read-write permissions
 	 * @param Size JIT memory size

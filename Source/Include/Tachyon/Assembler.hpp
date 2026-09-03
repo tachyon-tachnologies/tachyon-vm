@@ -30,22 +30,7 @@ struct Tachyon_JITState {
     std::unordered_map<std::string, void *> BlockMap;
 };
 
-class Label {
-    public:
-        explicit constexpr Label(uint32_t Id, void * Address) : Id(Id), Start(Address) {}
-        constexpr bool operator == (const Label & Other) const {
-            return (this->Id == Other.Id && this->Start == Other.Start);
-        }
-    private:
-        const void * const Start;
-        const uint32_t Id;
-};
-
 class Tachyon_AssemblerBase {
-    private:
-        TachyonAllocator Allocator;
-        std::vector<Label> LabelPool;
-        uint32_t LabelIds = 0;
     protected:
         void * CodeBase;
         void * Stack;
@@ -80,7 +65,7 @@ class Tachyon_AssemblerBase {
             this->CodeSize = 1024;
             this->BytesWritten = 0;
             /* allocate jit code buffer */
-            this->CodeBase = this->Allocator.Alloc(this->CodeSize);
+            this->CodeBase = TachyonAllocator::Alloc(this->CodeSize);
             TachyonAssert(this->CodeBase != nullptr);
             this->CodePointer = static_cast<uint8_t *>(this->CodeBase);
         }
@@ -98,18 +83,6 @@ class Tachyon_AssemblerBase {
         inline void * GetCodePointer(void) {
             return this->CodePointer;
         }
-
-        /**
-         * Creates a new label.
-         * @returns The newly created label
-         */
-        constexpr Label CreateLabel(void) {
-            return Label(LabelIds++, this->CodePointer);
-        }
-
-        constexpr void RegisterLabel(Label & Label) {
-            this->LabelPool.emplace_back(Label);
-        } 
 
         /**
          * Makes the JIT code executable and read-only.

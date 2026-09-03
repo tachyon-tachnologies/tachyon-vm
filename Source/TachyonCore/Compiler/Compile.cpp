@@ -26,12 +26,17 @@ static constexpr uint64_t GetVariableDataPointer(ScratchVariable * const Variabl
     return std::bit_cast<uint64_t>(&Variable->GetData());
 }
 
-static ScratchVariable * FindVariableFromDataBinds(const auto & Inputs, size_t InputIndex, const TinyIR::DataBindMap & DataBinds) {
-    auto Result = DataBinds.find(reinterpret_cast<void *>(Inputs[InputIndex]));
-    if (unlikely(Result == DataBinds.end())) {
-        return nullptr;
+static ScratchVariable * FindVariableFromDataBinds(const auto & Inputs, const size_t InputIndex, const TinyIR::DataBindMap & DataBinds) {
+    // auto Result = DataBinds.find(Inputs[InputIndex]);
+    // if (unlikely(Result == DataBinds.end())) {
+    //     return nullptr;
+    // }
+    for(auto & Item : DataBinds) {
+        if (Inputs[InputIndex] == Item.second.first) {
+            return reinterpret_cast<ScratchVariable *>(Item.first);
+        }
     }
-    return reinterpret_cast<ScratchVariable *>(Result->first);
+    return nullptr;
 }
 
 /* NOTE: again, this is x86-specific. when other architectures are added, i'll change this up */
@@ -79,7 +84,7 @@ static void __hot CompileIRBlock(TachyonAssembler & Asm, TinyIR::IRGenerator & I
             auto & Inputs = IRBlock.GetInputs();
             auto & VarInput = IRGen.GetVariable(Inputs[1]);
 
-            ScratchVariable * Variable = FindVariableFromDataBinds(Inputs, 1, DataBinds);
+            ScratchVariable * Variable = FindVariableFromDataBinds(Inputs, Inputs[1], DataBinds);
             TachyonAssert(Variable != nullptr);
             
             GpReg Register(VarInput.AllocatorId);
@@ -97,22 +102,8 @@ static void __hot CompileIRBlock(TachyonAssembler & Asm, TinyIR::IRGenerator & I
                     break;
                 }
                 case TinyIR::IRRCallType::LOOKS_SAY: {
-                    /* 
-                     * Windows and Linux share an issue where allocations are not done near the runtime 
-                     * It's so easy to fix for Windows, but it is absolute HELL for Linux.
-                     *
-                     * /proc/self/maps parsing didn't help me at all.
-                     *
-                     * The Linux kernel devs seriously need to make a reimplementation of the mmap
-                     * syscall that is similar to VirtualAlloc2 on Windows systems.
-                     * */
+                    /* RuntimeSay to the rescue */
                     Asm.CallFunction(reinterpret_cast<void *>(RuntimeSay));
-                    // Asm.Push(GpReg(GpReg::RAX));
-                    // Asm.Mov(GpReg(GpReg::RAX), reinterpret_cast<uint64_t>(RuntimeSay));
-                    //
-                    // Asm.IndirectRegisterCall(GpReg(GpReg::RAX));
-                    //
-                    // Asm.Pop(GpReg(GpReg::RAX));
                     break;
                 }
                 default: {
@@ -143,7 +134,7 @@ static void __hot CompileIRBlock(TachyonAssembler & Asm, TinyIR::IRGenerator & I
             
             Asm.CallFunction(std::bit_cast<void *>(IRBlock.Procedure->JITData.CodeEntry));
  
-            /* TODO: make it in the ACTUAL correct order */
+            /* TODO: make it LIFO order */
             ParamIndex = 0;
             const size_t ParamRegisterBase = GetParamRegisterBase();
             for(auto InputNum : Inputs) {
