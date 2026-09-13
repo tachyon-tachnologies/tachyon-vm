@@ -1,6 +1,10 @@
 # Tachyon VM
 Tachyon VM is a reimplementation of the Scratch VM written in C++ and SDL3. It aims to be the killer of any Scratch mod/runtime that currently exists.
 
+> [!WARNING]
+> This is a WIP (Work-In-Progress) project, so not every single Scratch block will be implemented, and the VM will not always be so stable. Do not expect everything to work in one go.
+
+
 # Compiling the VM
 To compile the Tachyon VM, you first need to perform the following prerequisites:
 1. Install Clang (for Windows systems, install it through MinGW and add it to your PATH). MSVC tools will **not** work.
@@ -17,7 +21,7 @@ Tachyon's VM requires SDL3, and libzip to be installed in order to compile succe
 1. Clone the repository along with it's submodules.
 2. Run ``.\vcpkg\bootstrap-vcpkg.bat`` for Windows systems, or ``./vcpkg/bootstrap-vcpkg.sh`` for Linux systems to install the package manager required to install the project's libraries
 3. Then, run ``vcpkg integrate install`` to be able to install libraries system-wide.
-4. Now, you can install the three dependencies: ``vcpkg install sdl3 libzip simdjson --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic`` for Windows systems, or ``vcpkg install sdl3 libzip simdjson --triplet=x64-linux --host-triplet=x64-linux`` for Linux systems.
+4. Now, you can install the three dependencies: ``vcpkg install sdl3 sdl3-image[png] libzip simdjson --triplet=x64-mingw-dynamic --host-triplet=x64-mingw-dynamic`` for Windows systems, or ``vcpkg install sdl3 sdl3-image[png] libzip simdjson --triplet=x64-linux --host-triplet=x64-linux`` for Linux systems.
 
 ## Building the VM
 Now that you've got that done, you may now follow these last two easy steps:
